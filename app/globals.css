@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f6fb;
+  --background: #eff4fb;
   --foreground: #111827;
   --surface-glow: rgba(148, 163, 184, 0.14);
 }
@@ -11,9 +11,24 @@ body {
   color: var(--foreground);
   min-height: 100vh;
   background-image:
-    radial-gradient(circle at top left, rgba(99, 102, 241, 0.10), transparent 24rem),
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.09), transparent 18rem),
-    linear-gradient(180deg, #f8fbff 0%, #f3f5fb 40%, #eef2f7 100%);
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 24rem),
+    radial-gradient(circle at top right, rgba(13, 148, 136, 0.10), transparent 18rem),
+    radial-gradient(circle at 20% 80%, rgba(249, 115, 22, 0.08), transparent 20rem),
+    linear-gradient(180deg, #f8fbff 0%, #f3f7fc 42%, #eef3f8 100%);
+  background-attachment: fixed;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 /* Remove default outline on focusable elements for cleaner look */

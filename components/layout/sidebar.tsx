@@ -56,23 +56,28 @@ export function Sidebar({
   });
 
   return (
-    <aside className={cn("min-h-screen bg-gray-900 flex flex-col", className)}>
+    <aside
+      className={cn(
+        "min-h-screen border-r border-slate-800/80 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.22),_transparent_28rem),linear-gradient(180deg,#0f172a_0%,#111827_45%,#0b1220_100%)] flex flex-col",
+        className
+      )}
+    >
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-gray-800">
+      <div className="border-b border-slate-800/80 px-5 py-5">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10 shadow-inner ring-1 ring-white/10">
             <span className="text-white font-bold text-sm">IC</span>
           </div>
           <div>
             <p className="text-white font-semibold text-sm leading-tight">IndiqueCraft</p>
-            <p className="text-gray-400 text-xs">Factory Manager</p>
+            <p className="text-slate-400 text-xs">Factory Manager</p>
           </div>
           {onNavigate && (
             <button
               type="button"
               aria-label="Close navigation"
               onClick={onNavigate}
-              className="ml-auto rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white lg:hidden"
+              className="ml-auto rounded-md p-1 text-slate-400 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
             >
               <X size={18} />
             </button>
@@ -81,7 +86,7 @@ export function Sidebar({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      <nav className="flex-1 space-y-1 px-3 py-4">
         {visibleItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -93,8 +98,8 @@ export function Sidebar({
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors group",
                 active
-                  ? "bg-indigo-600 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+                  ? "bg-white/12 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-white/10"
+                  : "text-slate-400 hover:bg-white/8 hover:text-white"
               )}
             >
               <Icon size={18} />
@@ -107,14 +112,14 @@ export function Sidebar({
 
       {/* User */}
       {session?.user && (
-        <div className="px-4 py-4 border-t border-gray-800">
+        <div className="border-t border-slate-800/80 px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-indigo-700 rounded-full flex items-center justify-center text-white text-xs font-bold">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
               {session.user.name?.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-medium truncate">{session.user.name}</p>
-              <p className="text-gray-500 text-xs truncate">{session.user.role}</p>
+              <p className="text-slate-500 text-xs truncate">{session.user.role}</p>
             </div>
           </div>
         </div>
