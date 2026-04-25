@@ -56,7 +56,7 @@ export default function VendorRequestsPage() {
         page: String(page),
         limit: String(PAGE_SIZE),
       });
-      const res = await fetch(`/api/vendor-requests?${params}`);
+      const res = await fetch(`/api/vendor-requests?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!active) return;
       setRequests(data.requests || []);

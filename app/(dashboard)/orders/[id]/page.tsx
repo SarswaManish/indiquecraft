@@ -114,7 +114,7 @@ export default function OrderDetailPage() {
   const [statusSaving, setStatusSaving] = useState(false);
 
   async function fetchOrder() {
-    const res = await fetch(`/api/orders/${id}`);
+    const res = await fetch(`/api/orders/${id}`, { cache: "no-store" });
     const data = await res.json();
     setOrder(data);
     setLoading(false);
@@ -124,7 +124,7 @@ export default function OrderDetailPage() {
     let active = true;
 
     async function loadOrder() {
-      const res = await fetch(`/api/orders/${id}`);
+      const res = await fetch(`/api/orders/${id}`, { cache: "no-store" });
       const data = await res.json();
       if (!active) return;
       setOrder(data);

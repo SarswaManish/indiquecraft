@@ -64,7 +64,7 @@ export default function OrdersPage() {
         page: String(page),
         limit: String(PAGE_SIZE),
       });
-      const res = await fetch(`/api/orders?${params}`);
+      const res = await fetch(`/api/orders?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!active) return;
       setOrders(data.orders || []);

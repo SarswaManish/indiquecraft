@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
+import { jsonNoStore } from "@/lib/http";
 import { z } from "zod";
 import { OrderStatus, Prisma, ProductionStage, Role } from "@prisma/client";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
@@ -20,12 +21,12 @@ const stageUpdateSchema = z.object({
 
 export async function POST(req: NextRequest) {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const parsed = stageUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return jsonNoStore({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   const log = await db.$transaction(async (tx) => {
@@ -58,12 +59,12 @@ export async function POST(req: NextRequest) {
 
   await invalidateReadCaches();
 
-  return NextResponse.json(log, { status: 201 });
+  return jsonNoStore(log, { status: 201 });
 }
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
   const role = session.user.role as Role;
 
   const { searchParams } = new URL(req.url);
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
     const querySignature = searchParams.toString() || "view=queue";
     const cached = await getProductionQueueCache<Record<string, unknown>>(role, querySignature);
     if (cached) {
-      return NextResponse.json(cached, {
+      return jsonNoStore(cached, {
         headers: {
           "x-cache": "redis-hit",
         },
@@ -142,7 +143,7 @@ export async function GET(req: NextRequest) {
 
     const response = { items, total, page, limit, stageCounts };
     await setProductionQueueCache(role, querySignature, response);
-    return NextResponse.json(response, {
+    return jsonNoStore(response, {
       headers: {
         "x-cache": "redis-miss",
       },
@@ -161,5 +162,5 @@ export async function GET(req: NextRequest) {
     include: { updatedBy: { select: { name: true } } },
   });
 
-  return NextResponse.json({ logs });
+  return jsonNoStore({ logs });
 }

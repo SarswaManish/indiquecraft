@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
 import { Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
+import { jsonNoStore } from "@/lib/http";
 import { getDashboardSectionsForRole } from "@/lib/rbac";
 import { getDashboardCache, setDashboardCache } from "@/lib/server-cache";
 
 export async function GET() {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
   const role = session.user.role as Role;
   const cached = await getDashboardCache<Record<string, unknown>>(role);
   if (cached) {
-    return NextResponse.json(cached, {
+    return jsonNoStore(cached, {
       headers: {
         "x-cache": "redis-hit",
       },
@@ -158,7 +158,7 @@ export async function GET() {
 
   await setDashboardCache(role, response);
 
-  return NextResponse.json(response, {
+  return jsonNoStore(response, {
     headers: {
       "x-cache": "redis-miss",
     },

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { Prisma, ProductionStage, Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
+import { jsonNoStore } from "@/lib/http";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { getReportsCache, setReportsCache } from "@/lib/server-cache";
 
@@ -26,7 +27,7 @@ function getPagination(searchParams: URLSearchParams) {
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
   const role = session.user.role as Role;
 
   const { searchParams } = new URL(req.url);
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   const cached = await getReportsCache<Record<string, unknown>>(role, querySignature);
   if (cached) {
-    return NextResponse.json(cached, {
+    return jsonNoStore(cached, {
       headers: {
         "x-cache": "redis-hit",
       },
@@ -77,7 +78,7 @@ export async function GET(req: NextRequest) {
       },
     };
     await setReportsCache(role, querySignature, response);
-    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
+    return jsonNoStore(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "vendor-pending") {
@@ -116,7 +117,7 @@ export async function GET(req: NextRequest) {
       },
     };
     await setReportsCache(role, querySignature, response);
-    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
+    return jsonNoStore(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "delayed-orders") {
@@ -147,7 +148,7 @@ export async function GET(req: NextRequest) {
       },
     };
     await setReportsCache(role, querySignature, response);
-    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
+    return jsonNoStore(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "raw-material-pending") {
@@ -191,7 +192,7 @@ export async function GET(req: NextRequest) {
       },
     };
     await setReportsCache(role, querySignature, response);
-    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
+    return jsonNoStore(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "dispatch-summary") {
@@ -223,13 +224,13 @@ export async function GET(req: NextRequest) {
       },
     };
     await setReportsCache(role, querySignature, response);
-    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
+    return jsonNoStore(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "customer-history") {
     const customerId = searchParams.get("customerId");
     if (!customerId) {
-      return NextResponse.json({ error: "customerId required" }, { status: 400 });
+      return jsonNoStore({ error: "customerId required" }, { status: 400 });
     }
 
     const where: Prisma.OrderWhereInput = { customerId };
@@ -257,8 +258,8 @@ export async function GET(req: NextRequest) {
       },
     };
     await setReportsCache(role, querySignature, response);
-    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
+    return jsonNoStore(response, { headers: { "x-cache": "redis-miss" } });
   }
 
-  return NextResponse.json({ error: "Unknown report type" }, { status: 400 });
+  return jsonNoStore({ error: "Unknown report type" }, { status: 400 });
 }

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
+import { jsonNoStore } from "@/lib/http";
 import { z } from "zod";
 import {
   FinishType,
@@ -73,7 +74,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const order = await db.order.findUnique({
@@ -106,8 +107,8 @@ export async function GET(
     },
   });
 
-  if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(order);
+  if (!order) return jsonNoStore({ error: "Not found" }, { status: 404 });
+  return jsonNoStore(order);
 }
 
 export async function PATCH(
@@ -115,13 +116,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
 
   const body = await req.json();
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return jsonNoStore({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   try {
@@ -291,13 +292,13 @@ export async function PATCH(
 
     await invalidateReadCaches();
 
-    return NextResponse.json(order);
+    return jsonNoStore(order);
   } catch (error) {
     const status =
       typeof error === "object" && error !== null && "status" in error
         ? Number(error.status)
         : 500;
     const message = error instanceof Error ? error.message : "Failed to update order";
-    return NextResponse.json({ error: message }, { status });
+    return jsonNoStore({ error: message }, { status });
   }
 }

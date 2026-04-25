@@ -72,7 +72,7 @@ export default function VendorRequestDetailPage() {
   const { showToast } = useToast();
 
   async function fetchVR() {
-    const res = await fetch(`/api/vendor-requests/${id}`);
+    const res = await fetch(`/api/vendor-requests/${id}`, { cache: "no-store" });
     const data = await res.json();
     setVR(data);
     setLoading(false);
@@ -82,7 +82,7 @@ export default function VendorRequestDetailPage() {
     let active = true;
 
     async function loadVendorRequest() {
-      const res = await fetch(`/api/vendor-requests/${id}`);
+      const res = await fetch(`/api/vendor-requests/${id}`, { cache: "no-store" });
       const data = await res.json();
       if (!active) return;
       setVR(data);

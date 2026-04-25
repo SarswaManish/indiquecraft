@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
+import { jsonNoStore } from "@/lib/http";
 import { z } from "zod";
 import { VendorRequestStatus } from "@prisma/client";
 import { generateNextVendorRequestNumber } from "@/lib/document-numbers";
@@ -25,7 +26,7 @@ const createSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
@@ -59,17 +60,17 @@ export async function GET(req: NextRequest) {
     db.vendorRequest.count({ where }),
   ]);
 
-  return NextResponse.json({ requests, total, page, limit });
+  return jsonNoStore({ requests, total, page, limit });
 }
 
 export async function POST(req: NextRequest) {
   const session = await getAuthSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return jsonNoStore({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return jsonNoStore({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   const { items, ...vrData } = parsed.data;
@@ -121,5 +122,5 @@ export async function POST(req: NextRequest) {
 
   await invalidateReadCaches();
 
-  return NextResponse.json(vendorRequest, { status: 201 });
+  return jsonNoStore(vendorRequest, { status: 201 });
 }
