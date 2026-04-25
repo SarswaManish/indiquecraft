@@ -1,0 +1,305 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  ORDER_MANAGER
+  PURCHASE_COORDINATOR
+  PRODUCTION_MANAGER
+  DISPATCH_MANAGER
+  OWNER
+}
+
+enum OrderSource {
+  PHONE
+  WHATSAPP
+  DIRECT
+  EMAIL
+  OTHER
+}
+
+enum OrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum OrderStatus {
+  NEW
+  RAW_MATERIAL_PENDING
+  MATERIAL_RECEIVED
+  IN_PRODUCTION
+  FINISHING
+  PACKING
+  READY_TO_DISPATCH
+  DISPATCHED
+  COMPLETED
+  DELAYED
+  CANCELLED
+}
+
+enum ProductionStage {
+  NOT_STARTED
+  WAITING_MATERIAL
+  MANUFACTURING
+  PLATING
+  POLISHING
+  FINISHING
+  PACKING
+  COMPLETED
+}
+
+enum VendorRequestStatus {
+  DRAFT
+  REQUESTED
+  FOLLOW_UP_PENDING
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+  DELAYED
+  CANCELLED
+}
+
+enum FinishType {
+  PLAIN
+  GOLD_PLATED
+  RHODIUM
+  ANTIQUE
+  TWO_TONE
+  OTHER
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(ORDER_MANAGER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  productionLogs ProductionLog[]
+  dispatches     Dispatch[]
+
+  @@map("users")
+}
+
+// ─── Customer ─────────────────────────────────────────────────────────────────
+
+model Customer {
+  id        String   @id @default(cuid())
+  partyName String
+  phone     String
+  city      String?
+  address   String?
+  gstNumber String?
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("customers")
+}
+
+// ─── Product ──────────────────────────────────────────────────────────────────
+
+model Product {
+  id                  String     @id @default(cuid())
+  sku                 String     @unique
+  name                String
+  category            String
+  defaultSize         String?
+  finishType          FinishType @default(PLAIN)
+  imageUrl            String?
+  defaultLeadTimeDays Int        @default(7)
+  rawMaterialRequired Boolean    @default(false)
+  isActive            Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  orderItems OrderItem[]
+
+  @@map("products")
+}
+
+// ─── Vendor ───────────────────────────────────────────────────────────────────
+
+model Vendor {
+  id               String   @id @default(cuid())
+  name             String
+  phone            String
+  whatsappNumber   String?
+  city             String?
+  materialSupplied String?
+  standardLeadDays Int      @default(7)
+  notes            String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  vendorRequests VendorRequest[]
+
+  @@map("vendors")
+}
+
+// ─── Order ────────────────────────────────────────────────────────────────────
+
+model Order {
+  id                   String        @id @default(cuid())
+  orderNumber          String        @unique
+  customer             Customer      @relation(fields: [customerId], references: [id])
+  customerId           String
+  orderDate            DateTime      @default(now())
+  promisedDeliveryDate DateTime?
+  source               OrderSource   @default(PHONE)
+  priority             OrderPriority @default(NORMAL)
+  status               OrderStatus   @default(NEW)
+  notes                String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  orderItems OrderItem[]
+  dispatches Dispatch[]
+
+  @@map("orders")
+}
+
+// ─── Order Item ───────────────────────────────────────────────────────────────
+
+model OrderItem {
+  id                  String          @id @default(cuid())
+  order               Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId             String
+  product             Product         @relation(fields: [productId], references: [id])
+  productId           String
+  size                String?
+  quantity            Int
+  finishType          FinishType      @default(PLAIN)
+  rawMaterialRequired Boolean         @default(false)
+  productionStage     ProductionStage @default(NOT_STARTED)
+  notes               String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  vendorRequestItems VendorRequestItem[]
+  productionLogs     ProductionLog[]
+  dispatchItems      DispatchItem[]
+
+  @@map("order_items")
+}
+
+// ─── Vendor Request ───────────────────────────────────────────────────────────
+
+model VendorRequest {
+  id                  String              @id @default(cuid())
+  requestNumber       String              @unique
+  vendor              Vendor              @relation(fields: [vendorId], references: [id])
+  vendorId            String
+  requestDate         DateTime            @default(now())
+  expectedArrivalDate DateTime?
+  actualReceiptDate   DateTime?
+  status              VendorRequestStatus @default(DRAFT)
+  notes               String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  vendorRequestItems VendorRequestItem[]
+  materialReceipts   MaterialReceipt[]
+
+  @@map("vendor_requests")
+}
+
+// ─── Vendor Request Item ──────────────────────────────────────────────────────
+
+model VendorRequestItem {
+  id              String        @id @default(cuid())
+  vendorRequest   VendorRequest @relation(fields: [vendorRequestId], references: [id], onDelete: Cascade)
+  vendorRequestId String
+  orderItem       OrderItem     @relation(fields: [orderItemId], references: [id])
+  orderItemId     String
+  materialName    String
+  requestedQty    Int
+  receivedQty     Int           @default(0)
+  pendingQty      Int
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("vendor_request_items")
+}
+
+// ─── Material Receipt ─────────────────────────────────────────────────────────
+
+model MaterialReceipt {
+  id               String        @id @default(cuid())
+  vendorRequest    VendorRequest @relation(fields: [vendorRequestId], references: [id])
+  vendorRequestId  String
+  receivedDate     DateTime      @default(now())
+  totalQtyReceived Int
+  remarks          String?
+  createdAt        DateTime      @default(now())
+
+  @@map("material_receipts")
+}
+
+// ─── Production Log ───────────────────────────────────────────────────────────
+
+model ProductionLog {
+  id             String          @id @default(cuid())
+  orderItem      OrderItem       @relation(fields: [orderItemId], references: [id])
+  orderItemId    String
+  stage          ProductionStage
+  updatedBy      User?           @relation(fields: [updatedById], references: [id])
+  updatedById    String?
+  assignedPerson String?
+  remarks        String?
+  loggedAt       DateTime        @default(now())
+
+  @@map("production_logs")
+}
+
+// ─── Dispatch ─────────────────────────────────────────────────────────────────
+
+model Dispatch {
+  id             String   @id @default(cuid())
+  order          Order    @relation(fields: [orderId], references: [id])
+  orderId        String
+  dispatchDate   DateTime @default(now())
+  transporter    String?
+  trackingNumber String?
+  remarks        String?
+  isPartial      Boolean  @default(false)
+  createdBy      User?    @relation(fields: [createdById], references: [id])
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  dispatchItems DispatchItem[]
+
+  @@map("dispatches")
+}
+
+// ─── Dispatch Item ────────────────────────────────────────────────────────────
+
+model DispatchItem {
+  id            String    @id @default(cuid())
+  dispatch      Dispatch  @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  dispatchId    String
+  orderItem     OrderItem @relation(fields: [orderItemId], references: [id])
+  orderItemId   String
+  qtyDispatched Int
+
+  @@map("dispatch_items")
+}

@@ -1,0 +1,151 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { PageHeader } from "@/components/shared/page-header";
+import { DataTable } from "@/components/shared/data-table";
+import { SearchInput } from "@/components/shared/search-input";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+import { OrderStatusBadge, PriorityBadge } from "@/components/shared/status-badge";
+import { formatDate, delayedDays } from "@/lib/utils";
+import { ORDER_STATUS_LABELS, PRIORITY_LABELS } from "@/lib/constants";
+import { Plus, AlertTriangle } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
+import Link from "next/link";
+import { OrderStatus, OrderPriority } from "@prisma/client";
+
+interface Order {
+  id: string;
+  orderNumber: string;
+  orderDate: string;
+  promisedDeliveryDate: string | null;
+  status: OrderStatus;
+  priority: OrderPriority;
+  customer: { partyName: string; phone: string };
+  _count: { orderItems: number };
+}
+
+const statusOptions = [
+  { value: "", label: "All Statuses" },
+  ...Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+];
+
+const priorityOptions = [
+  { value: "", label: "All Priorities" },
+  ...Object.entries(PRIORITY_LABELS).map(([value, label]) => ({ value, label })),
+];
+
+export default function OrdersPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(searchParams.get("status") || "");
+  const [priority, setPriority] = useState("");
+  const [loading, setLoading] = useState(true);
+  const debouncedSearch = useDebounce(search, 300);
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      search: debouncedSearch,
+      status,
+      priority,
+      limit: "50",
+    });
+    const res = await fetch(`/api/orders?${params}`);
+    const data = await res.json();
+    setOrders(data.orders || []);
+    setTotal(data.total || 0);
+    setLoading(false);
+  }, [debouncedSearch, status, priority]);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  const columns = [
+    {
+      key: "orderNumber", header: "Order #",
+      render: (row: Order) => (
+        <span className="font-mono font-medium text-indigo-700">{row.orderNumber}</span>
+      ),
+    },
+    {
+      key: "customer", header: "Customer",
+      render: (row: Order) => (
+        <div>
+          <p className="font-medium text-gray-900">{row.customer.partyName}</p>
+          <p className="text-xs text-gray-400">{row.customer.phone}</p>
+        </div>
+      ),
+    },
+    { key: "orderDate", header: "Order Date", render: (row: Order) => formatDate(row.orderDate) },
+    {
+      key: "promisedDeliveryDate", header: "Due Date",
+      render: (row: Order) => {
+        if (!row.promisedDeliveryDate) return <span className="text-gray-400">—</span>;
+        const days = delayedDays(row.promisedDeliveryDate);
+        return (
+          <div>
+            <p>{formatDate(row.promisedDeliveryDate)}</p>
+            {days > 0 && (
+              <p className="text-xs text-red-600 flex items-center gap-1">
+                <AlertTriangle size={11} /> {days}d overdue
+              </p>
+            )}
+          </div>
+        );
+      },
+    },
+    { key: "status", header: "Status", render: (row: Order) => <OrderStatusBadge status={row.status} /> },
+    { key: "priority", header: "Priority", render: (row: Order) => <PriorityBadge priority={row.priority} /> },
+    { key: "items", header: "Items", render: (row: Order) => (
+      <span className="text-gray-500 text-sm">{row._count.orderItems}</span>
+    )},
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        title={`Orders (${total})`}
+        description="All customer orders"
+        actions={
+          <Link href="/orders/new">
+            <Button><Plus size={16} /> New Order</Button>
+          </Link>
+        }
+      />
+
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-center">
+          <SearchInput
+            placeholder="Search order #, customer…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-64"
+          />
+          <Select
+            options={statusOptions}
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="w-48"
+          />
+          <Select
+            options={priorityOptions}
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            className="w-40"
+          />
+        </div>
+        <DataTable
+          columns={columns}
+          data={orders}
+          loading={loading}
+          emptyMessage="No orders found"
+          onRowClick={(row) => router.push(`/orders/${(row as Order).id}`)}
+        />
+      </div>
+    </div>
+  );
+}
