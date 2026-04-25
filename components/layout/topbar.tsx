@@ -1,18 +1,26 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { LogOut, Bell } from "lucide-react";
+import { LogOut, Bell, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/constants";
 import { Role } from "@prisma/client";
 
-export function Topbar() {
+export function Topbar({ onMenuOpen }: { onMenuOpen: () => void }) {
   const { data: session } = useSession();
 
   return (
-    <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0">
-      <div />
+    <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
       <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={onMenuOpen} className="lg:hidden">
+          <Menu size={18} />
+        </Button>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 sm:hidden">IndiqueCraft</p>
+          <p className="text-xs text-gray-500 sm:hidden">{session?.user?.name}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 sm:gap-3">
         <button className="text-gray-400 hover:text-gray-600 transition-colors">
           <Bell size={18} />
         </button>

@@ -1,17 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f9fafb;
+  --background: #f4f6fb;
   --foreground: #111827;
+  --surface-glow: rgba(148, 163, 184, 0.14);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  min-height: 100vh;
+  background-image:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.10), transparent 24rem),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.09), transparent 18rem),
+    linear-gradient(180deg, #f8fbff 0%, #f3f5fb 40%, #eef2f7 100%);
 }
 
 /* Remove default outline on focusable elements for cleaner look */
 *:focus-visible {
   outline: 2px solid #6366f1;
   outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.18);
 }

@@ -22,8 +22,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
   const category = searchParams.get("category") || "";
+  const includeInactive = searchParams.get("includeInactive") === "true";
 
-  const where: Record<string, unknown> = { isActive: true };
+  const where: Record<string, unknown> = includeInactive ? {} : { isActive: true };
   if (search) {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },

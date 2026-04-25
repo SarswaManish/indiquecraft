@@ -101,7 +101,7 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Overview
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Active Orders"
               value={data.owner.totalActiveOrders}
@@ -136,7 +136,7 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Purchase / Vendor
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Pending Requests"
               value={data.purchase.pendingVendorRequests}
@@ -171,7 +171,7 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Production Floor
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard
               title="Waiting Material"
               value={data.production.waitingMaterialItems}
@@ -212,7 +212,7 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Dispatch
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Ready to Dispatch"
               value={data.dispatch.readyToDispatchOrders}
@@ -230,7 +230,7 @@ export default function DashboardPage() {
       )}
 
       {/* Detail tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
         {/* Delayed orders */}
         {data.owner && data.owner.recentDelayedOrders.length > 0 && (
           <Card>

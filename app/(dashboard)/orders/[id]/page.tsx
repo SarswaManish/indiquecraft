@@ -224,12 +224,12 @@ export default function OrderDetailPage() {
   const readyItems = order.orderItems.filter((item) => item.productionStage === "COMPLETED").length;
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-6xl">
       <PageHeader
         title={order.orderNumber}
         description={`Order for ${order.customer.partyName}`}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => router.back()}><ArrowLeft size={16} /> Back</Button>
             <Button variant="secondary" onClick={() => { setNewStatus(order.status); setStatusModal(true); }}>
               Update Status
@@ -242,7 +242,7 @@ export default function OrderDetailPage() {
       />
 
       {/* Order Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-xs text-gray-500">Status</p>
           <div className="mt-1"><OrderStatusBadge status={order.status} /></div>
@@ -266,7 +266,7 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Material Watch</p>
           <p className="mt-2 text-2xl font-bold text-amber-900">{blockedItems}</p>
@@ -284,7 +284,7 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         {/* Customer info */}
         <Card>
           <CardHeader><CardTitle>Customer</CardTitle></CardHeader>
@@ -299,7 +299,7 @@ export default function OrderDetailPage() {
         </Card>
 
         {/* Vendor requests summary */}
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -321,7 +321,7 @@ export default function OrderDetailPage() {
                       <Link
                         key={vri.id}
                         href={`/vendor-requests/${vri.vendorRequest.id}`}
-                        className="flex items-center justify-between px-6 py-3 hover:bg-gray-50"
+                        className="flex flex-col gap-3 px-5 py-4 hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-6"
                       >
                         <div>
                           <p className="text-sm font-medium">{vri.vendorRequest.requestNumber}</p>
@@ -329,7 +329,7 @@ export default function OrderDetailPage() {
                             {vri.vendorRequest.vendor.name} · {vri.materialName}
                           </p>
                         </div>
-                        <div className="text-right text-xs">
+                        <div className="text-left text-xs sm:text-right">
                           <p>Req: {vri.requestedQty} | Rcvd: {vri.receivedQty} | Pend: {vri.pendingQty}</p>
                           <Badge className={
                             vri.pendingQty === 0 ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
@@ -353,15 +353,15 @@ export default function OrderDetailPage() {
         <CardContent className="p-0">
           <div className="divide-y divide-gray-100">
             {order.orderItems.map((item) => (
-              <div key={item.id} className="px-6 py-4">
-                <div className="flex items-start justify-between gap-4">
+              <div key={item.id} className="px-5 py-4 sm:px-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
                       <span className="font-medium text-gray-900">{item.product.name}</span>
                       <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded">{item.product.sku}</span>
                       {item.size && <span className="text-xs text-gray-500">{item.size}</span>}
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-600">
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                       <span>Qty: <strong>{item.quantity}</strong></span>
                       <span>Finish: {FINISH_TYPE_LABELS[item.finishType]}</span>
                       {item.rawMaterialRequired && (
@@ -386,7 +386,7 @@ export default function OrderDetailPage() {
                     )}
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-row items-center justify-between gap-3 lg:flex-col lg:items-end">
                     <ProductionStageBadge stage={item.productionStage} />
                     <Button
                       size="sm"
@@ -413,14 +413,14 @@ export default function OrderDetailPage() {
           <CardContent className="p-0">
             <div className="divide-y divide-gray-100">
               {order.dispatches.map((d) => (
-                <div key={d.id} className="px-6 py-4">
-                  <div className="flex items-center justify-between">
+                <div key={d.id} className="px-5 py-4 sm:px-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-medium">{formatDate(d.dispatchDate)}</p>
                       {d.transporter && <p className="text-xs text-gray-500">Via {d.transporter}</p>}
                       {d.trackingNumber && <p className="text-xs text-gray-500">Tracking: {d.trackingNumber}</p>}
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       {d.isPartial && <Badge className="bg-orange-100 text-orange-700">Partial</Badge>}
                       {d.createdBy && <p className="text-xs text-gray-400 mt-1">By {d.createdBy.name}</p>}
                     </div>
@@ -477,7 +477,7 @@ export default function OrderDetailPage() {
       {/* Dispatch Modal */}
       <Modal open={dispatchModal} onClose={() => setDispatchModal(false)} title="Create Dispatch" size="lg">
         <form onSubmit={handleDispatch} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
               label="Dispatch Date"
               type="date"

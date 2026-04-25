@@ -19,16 +19,19 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
+  const includeInactive = searchParams.get("includeInactive") === "true";
 
   const where = search
     ? {
-        isActive: true,
+        ...(includeInactive ? {} : { isActive: true }),
         OR: [
           { name: { contains: search, mode: "insensitive" as const } },
           { city: { contains: search, mode: "insensitive" as const } },
           { materialSupplied: { contains: search, mode: "insensitive" as const } },
         ],
       }
+    : includeInactive
+    ? {}
     : { isActive: true };
 
   const vendors = await db.vendor.findMany({

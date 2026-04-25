@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { FINISH_TYPE_LABELS } from "@/lib/constants";
 import { FinishType } from "@prisma/client";
@@ -37,8 +37,11 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const debouncedSearch = useDebounce(search, 300);
 
   useEffect(() => {
@@ -46,10 +49,15 @@ export default function ProductsPage() {
 
     async function loadProducts() {
       setLoading(true);
-      const res = await fetch(`/api/products?search=${encodeURIComponent(debouncedSearch)}`);
+      const params = new URLSearchParams({
+        search: debouncedSearch,
+        includeInactive: String(showInactive),
+      });
+      const res = await fetch(`/api/products?${params}`);
       const data = await res.json();
       if (!active) return;
       setProducts(data.products || []);
+      setSelectedProductIds([]);
       setLoading(false);
     }
 
@@ -57,27 +65,96 @@ export default function ProductsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, showInactive]);
+
+  async function refreshProducts() {
+    setLoading(true);
+    const params = new URLSearchParams({
+      search: debouncedSearch,
+      includeInactive: String(showInactive),
+    });
+    const res = await fetch(`/api/products?${params}`);
+    const data = await res.json();
+    setProducts(data.products || []);
+    setLoading(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch("/api/products", {
-      method: "POST",
+    await fetch(editingProductId ? `/api/products/${editingProductId}` : "/api/products", {
+      method: editingProductId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
-    setLoading(true);
-    const res = await fetch(`/api/products?search=${encodeURIComponent(debouncedSearch)}`);
-    const data = await res.json();
-    setProducts(data.products || []);
-    setLoading(false);
+    setEditingProductId(null);
+    await refreshProducts();
   }
 
+  async function handleArchive(product: Product) {
+    await fetch(`/api/products/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !product.isActive }),
+    });
+    await refreshProducts();
+  }
+
+  async function handleBulkArchive(nextActiveState: boolean) {
+    await Promise.all(
+      selectedProductIds.map((productId) =>
+        fetch(`/api/products/${productId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: nextActiveState }),
+        })
+      )
+    );
+    setSelectedProductIds([]);
+    await refreshProducts();
+  }
+
+  async function handleEdit(product: Product) {
+    const response = await fetch(`/api/products/${product.id}`);
+    const detail = await response.json();
+    setEditingProductId(product.id);
+    setForm({
+      sku: detail.sku,
+      name: detail.name,
+      category: detail.category,
+      defaultSize: detail.defaultSize || "",
+      finishType: detail.finishType,
+      defaultLeadTimeDays: detail.defaultLeadTimeDays,
+      rawMaterialRequired: detail.rawMaterialRequired,
+    });
+    setModalOpen(true);
+  }
+
+  function toggleProductSelection(productId: string) {
+    setSelectedProductIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId]
+    );
+  }
+
+  const areAllVisibleSelected =
+    products.length > 0 && products.every((product) => selectedProductIds.includes(product.id));
+
   const columns = [
+    { key: "select", header: "", render: (row: Product) => (
+      <div onClick={(event) => event.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selectedProductIds.includes(row.id)}
+          onChange={() => toggleProductSelection(row.id)}
+          className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+        />
+      </div>
+    ), className: "w-12" },
     { key: "sku", header: "SKU", render: (row: Product) => (
       <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{row.sku}</span>
     )},
@@ -94,28 +171,84 @@ export default function ProductsPage() {
         ? <Badge className="bg-yellow-100 text-yellow-700">Required</Badge>
         : <Badge className="bg-gray-100 text-gray-500">No</Badge>
     )},
+    { key: "status", header: "Status", render: (row: Product) => (
+      row.isActive
+        ? <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+        : <Badge className="bg-gray-100 text-gray-500">Archived</Badge>
+    )},
+    { key: "actions", header: "", render: (row: Product) => (
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={() => handleEdit(row)}>
+          <Pencil size={14} />
+          Edit
+        </Button>
+        <Button
+          type="button"
+          variant={row.isActive ? "outline" : "secondary"}
+          size="sm"
+          onClick={() => void handleArchive(row)}
+        >
+          {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
+          {row.isActive ? "Archive" : "Restore"}
+        </Button>
+      </div>
+    )},
   ];
 
   return (
     <div>
       <PageHeader
         title={`Products (${products.length})`}
-        description="Silver product catalogue"
+        description="Silver product catalogue with archive, restore, edit and bulk cleanup support."
         actions={
-          <Button onClick={() => setModalOpen(true)}>
+          <Button onClick={() => {
+            setEditingProductId(null);
+            setForm(emptyForm);
+            setModalOpen(true);
+          }}>
             <Plus size={16} /> Add Product
           </Button>
         }
       />
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-100">
-          <SearchInput
-            placeholder="Search SKU, name, category…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
+        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            <SearchInput
+              placeholder="Search SKU, name, category…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+            <Button variant={showInactive ? "secondary" : "outline"} size="sm" onClick={() => setShowInactive((value) => !value)}>
+              {showInactive ? "Hide Archived" : "Show Archived"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div onClick={(event) => event.stopPropagation()}>
+              <label className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={areAllVisibleSelected}
+                  onChange={() =>
+                    setSelectedProductIds(areAllVisibleSelected ? [] : products.map((product) => product.id))
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+                />
+                Select all
+              </label>
+            </div>
+            {selectedProductIds.length > 0 && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => void handleBulkArchive(false)}>
+                  <Trash2 size={14} /> Archive Selected ({selectedProductIds.length})
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => void handleBulkArchive(true)}>
+                  <RotateCcw size={14} /> Restore Selected
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <DataTable
           columns={columns}
@@ -125,15 +258,16 @@ export default function ProductsPage() {
         />
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add New Product" size="lg">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingProductId ? "Edit Product" : "Add New Product"} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
               label="SKU / Item Code *"
               required
               value={form.sku}
               onChange={(e) => setForm({ ...form, sku: e.target.value })}
               placeholder="AG-GANESH-4IN"
+              disabled={Boolean(editingProductId)}
             />
             <Input
               label="Product Name *"
@@ -143,7 +277,7 @@ export default function ProductsPage() {
               placeholder="Silver Ganesh Idol 4 inch"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
               label="Category *"
               required
@@ -158,7 +292,7 @@ export default function ProductsPage() {
               placeholder="4 inch"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Select
               label="Finish Type"
               value={form.finishType}
@@ -187,7 +321,7 @@ export default function ProductsPage() {
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" loading={saving}>Save Product</Button>
+            <Button type="submit" loading={saving}>{editingProductId ? "Save Changes" : "Save Product"}</Button>
           </div>
         </form>
       </Modal>

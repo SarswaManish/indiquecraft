@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Phone } from "lucide-react";
+import { Pencil, Plus, Phone, RotateCcw, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useDebounce } from "@/hooks/use-debounce";
 
 interface Vendor {
@@ -34,8 +35,11 @@ export default function VendorsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
   const debouncedSearch = useDebounce(search, 300);
 
   useEffect(() => {
@@ -43,10 +47,15 @@ export default function VendorsPage() {
 
     async function loadVendors() {
       setLoading(true);
-      const res = await fetch(`/api/vendors?search=${encodeURIComponent(debouncedSearch)}`);
+      const params = new URLSearchParams({
+        search: debouncedSearch,
+        includeInactive: String(showInactive),
+      });
+      const res = await fetch(`/api/vendors?${params}`);
       const data = await res.json();
       if (!active) return;
       setVendors(data.vendors || []);
+      setSelectedVendorIds([]);
       setLoading(false);
     }
 
@@ -54,27 +63,96 @@ export default function VendorsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, showInactive]);
+
+  async function refreshVendors() {
+    setLoading(true);
+    const params = new URLSearchParams({
+      search: debouncedSearch,
+      includeInactive: String(showInactive),
+    });
+    const res = await fetch(`/api/vendors?${params}`);
+    const data = await res.json();
+    setVendors(data.vendors || []);
+    setLoading(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch("/api/vendors", {
-      method: "POST",
+    await fetch(editingVendorId ? `/api/vendors/${editingVendorId}` : "/api/vendors", {
+      method: editingVendorId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
-    setLoading(true);
-    const res = await fetch(`/api/vendors?search=${encodeURIComponent(debouncedSearch)}`);
-    const data = await res.json();
-    setVendors(data.vendors || []);
-    setLoading(false);
+    setEditingVendorId(null);
+    await refreshVendors();
   }
 
+  async function handleArchive(vendor: Vendor) {
+    await fetch(`/api/vendors/${vendor.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !vendor.isActive }),
+    });
+    await refreshVendors();
+  }
+
+  async function handleBulkArchive(nextActiveState: boolean) {
+    await Promise.all(
+      selectedVendorIds.map((vendorId) =>
+        fetch(`/api/vendors/${vendorId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: nextActiveState }),
+        })
+      )
+    );
+    setSelectedVendorIds([]);
+    await refreshVendors();
+  }
+
+  async function handleEdit(vendor: Vendor) {
+    const response = await fetch(`/api/vendors/${vendor.id}`);
+    const detail = await response.json();
+    setEditingVendorId(vendor.id);
+    setForm({
+      name: detail.name,
+      phone: detail.phone,
+      whatsappNumber: detail.whatsappNumber || "",
+      city: detail.city || "",
+      materialSupplied: detail.materialSupplied || "",
+      standardLeadDays: detail.standardLeadDays,
+      notes: detail.notes || "",
+    });
+    setModalOpen(true);
+  }
+
+  function toggleVendorSelection(vendorId: string) {
+    setSelectedVendorIds((current) =>
+      current.includes(vendorId)
+        ? current.filter((id) => id !== vendorId)
+        : [...current, vendorId]
+    );
+  }
+
+  const areAllVisibleSelected =
+    vendors.length > 0 && vendors.every((vendor) => selectedVendorIds.includes(vendor.id));
+
   const columns = [
+    { key: "select", header: "", render: (row: Vendor) => (
+      <div onClick={(event) => event.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selectedVendorIds.includes(row.id)}
+          onChange={() => toggleVendorSelection(row.id)}
+          className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+        />
+      </div>
+    ), className: "w-12" },
     { key: "name", header: "Vendor Name", render: (row: Vendor) => (
       <span className="font-medium text-gray-900">{row.name}</span>
     )},
@@ -87,28 +165,82 @@ export default function VendorsPage() {
     )},
     { key: "standardLeadDays", header: "Lead", render: (row: Vendor) => `${row.standardLeadDays}d` },
     { key: "requests", header: "Requests", render: (row: Vendor) => row._count.vendorRequests },
+    { key: "status", header: "Status", render: (row: Vendor) => (
+      row.isActive
+        ? <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+        : <Badge className="bg-gray-100 text-gray-500">Archived</Badge>
+    )},
+    { key: "actions", header: "", render: (row: Vendor) => (
+      <div onClick={(event) => event.stopPropagation()} className="flex items-center justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={() => handleEdit(row)}>
+          <Pencil size={14} />
+          Edit
+        </Button>
+        <Button
+          type="button"
+          variant={row.isActive ? "outline" : "secondary"}
+          size="sm"
+          onClick={() => void handleArchive(row)}
+        >
+          {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
+          {row.isActive ? "Archive" : "Restore"}
+        </Button>
+      </div>
+    )},
   ];
 
   return (
     <div>
       <PageHeader
         title={`Vendors (${vendors.length})`}
-        description="Raw material and semi-finished goods suppliers"
+        description="Manage suppliers, clean up inactive records, and edit vendor profiles quickly."
         actions={
-          <Button onClick={() => setModalOpen(true)}>
+          <Button onClick={() => {
+            setEditingVendorId(null);
+            setForm(emptyForm);
+            setModalOpen(true);
+          }}>
             <Plus size={16} /> Add Vendor
           </Button>
         }
       />
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-100">
-          <SearchInput
-            placeholder="Search vendor name, city, material…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
+        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            <SearchInput
+              placeholder="Search vendor name, city, material…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+            <Button variant={showInactive ? "secondary" : "outline"} size="sm" onClick={() => setShowInactive((value) => !value)}>
+              {showInactive ? "Hide Archived" : "Show Archived"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-600">
+              <input
+                type="checkbox"
+                checked={areAllVisibleSelected}
+                onChange={() =>
+                  setSelectedVendorIds(areAllVisibleSelected ? [] : vendors.map((vendor) => vendor.id))
+                }
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+              />
+              Select all
+            </label>
+            {selectedVendorIds.length > 0 && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => void handleBulkArchive(false)}>
+                  <Trash2 size={14} /> Archive Selected ({selectedVendorIds.length})
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => void handleBulkArchive(true)}>
+                  <RotateCcw size={14} /> Restore Selected
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <DataTable
           columns={columns}
@@ -119,11 +251,11 @@ export default function VendorsPage() {
         />
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add New Vendor" size="lg">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingVendorId ? "Edit Vendor" : "Add New Vendor"} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input label="Vendor Name *" required value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input label="Phone *" required value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
               placeholder="+91 98765 43210" />
@@ -131,7 +263,7 @@ export default function VendorsPage() {
               onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value })}
               placeholder="Same as phone if same" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input label="City" value={form.city}
               onChange={(e) => setForm({ ...form, city: e.target.value })} />
             <Input label="Standard Lead Time (days)" type="number" min={1}
@@ -145,7 +277,7 @@ export default function VendorsPage() {
             onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button type="submit" loading={saving}>Save Vendor</Button>
+            <Button type="submit" loading={saving}>{editingVendorId ? "Save Changes" : "Save Vendor"}</Button>
           </div>
         </form>
       </Modal>

@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Phone } from "lucide-react";
+import { Pencil, Plus, Phone, RotateCcw, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useDebounce } from "@/hooks/use-debounce";
 
 interface Customer {
@@ -31,8 +32,11 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -41,11 +45,16 @@ export default function CustomersPage() {
 
     async function loadCustomers() {
       setLoading(true);
-      const res = await fetch(`/api/customers?search=${encodeURIComponent(debouncedSearch)}`);
+      const params = new URLSearchParams({
+        search: debouncedSearch,
+        includeInactive: String(showInactive),
+      });
+      const res = await fetch(`/api/customers?${params}`);
       const data = await res.json();
       if (!active) return;
       setCustomers(data.customers || []);
       setTotal(data.total || 0);
+      setSelectedCustomerIds([]);
       setLoading(false);
     }
 
@@ -53,28 +62,96 @@ export default function CustomersPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, showInactive]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    await fetch("/api/customers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setSaving(false);
-    setModalOpen(false);
-    setForm(emptyForm);
+  async function refreshCustomers() {
     setLoading(true);
-    const res = await fetch(`/api/customers?search=${encodeURIComponent(debouncedSearch)}`);
+    const params = new URLSearchParams({
+      search: debouncedSearch,
+      includeInactive: String(showInactive),
+    });
+    const res = await fetch(`/api/customers?${params}`);
     const data = await res.json();
     setCustomers(data.customers || []);
     setTotal(data.total || 0);
     setLoading(false);
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await fetch(editingCustomerId ? `/api/customers/${editingCustomerId}` : "/api/customers", {
+      method: editingCustomerId ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    setSaving(false);
+    setModalOpen(false);
+    setForm(emptyForm);
+    setEditingCustomerId(null);
+    await refreshCustomers();
+  }
+
+  async function handleArchive(customer: Customer) {
+    await fetch(`/api/customers/${customer.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !customer.isActive }),
+    });
+    await refreshCustomers();
+  }
+
+  async function handleBulkArchive(nextActiveState: boolean) {
+    await Promise.all(
+      selectedCustomerIds.map((customerId) =>
+        fetch(`/api/customers/${customerId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: nextActiveState }),
+        })
+      )
+    );
+    setSelectedCustomerIds([]);
+    await refreshCustomers();
+  }
+
+  async function handleEdit(customer: Customer) {
+    const response = await fetch(`/api/customers/${customer.id}`);
+    const detail = await response.json();
+    setEditingCustomerId(customer.id);
+    setForm({
+      partyName: detail.partyName,
+      phone: detail.phone,
+      city: detail.city || "",
+      address: detail.address || "",
+      gstNumber: detail.gstNumber || "",
+      notes: detail.notes || "",
+    });
+    setModalOpen(true);
+  }
+
+  function toggleCustomerSelection(customerId: string) {
+    setSelectedCustomerIds((current) =>
+      current.includes(customerId)
+        ? current.filter((id) => id !== customerId)
+        : [...current, customerId]
+    );
+  }
+
+  const areAllVisibleSelected =
+    customers.length > 0 && customers.every((customer) => selectedCustomerIds.includes(customer.id));
+
   const columns = [
+    { key: "select", header: "", render: (row: Customer) => (
+      <div onClick={(event) => event.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selectedCustomerIds.includes(row.id)}
+          onChange={() => toggleCustomerSelection(row.id)}
+          className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+        />
+      </div>
+    ), className: "w-12" },
     { key: "partyName", header: "Party Name", render: (row: Customer) => (
       <span className="font-medium text-gray-900">{row.partyName}</span>
     )},
@@ -88,28 +165,82 @@ export default function CustomersPage() {
     { key: "orders", header: "Orders", render: (row: Customer) => (
       <span className="text-gray-600">{row._count.orders}</span>
     )},
+    { key: "status", header: "Status", render: (row: Customer) => (
+      row.isActive
+        ? <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+        : <Badge className="bg-gray-100 text-gray-500">Archived</Badge>
+    )},
+    { key: "actions", header: "", render: (row: Customer) => (
+      <div onClick={(event) => event.stopPropagation()} className="flex items-center justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={() => handleEdit(row)}>
+          <Pencil size={14} />
+          Edit
+        </Button>
+        <Button
+          type="button"
+          variant={row.isActive ? "outline" : "secondary"}
+          size="sm"
+          onClick={() => void handleArchive(row)}
+        >
+          {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
+          {row.isActive ? "Archive" : "Restore"}
+        </Button>
+      </div>
+    )},
   ];
 
   return (
     <div>
       <PageHeader
         title={`Customers (${total})`}
-        description="Manage retail and wholesale customer accounts"
+        description="Manage customer accounts with archive, restore, edit, and bulk cleanup controls."
         actions={
-          <Button onClick={() => setModalOpen(true)}>
+          <Button onClick={() => {
+            setEditingCustomerId(null);
+            setForm(emptyForm);
+            setModalOpen(true);
+          }}>
             <Plus size={16} /> Add Customer
           </Button>
         }
       />
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-100">
-          <SearchInput
-            placeholder="Search by name, phone, city…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
+        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            <SearchInput
+              placeholder="Search by name, phone, city…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+            <Button variant={showInactive ? "secondary" : "outline"} size="sm" onClick={() => setShowInactive((value) => !value)}>
+              {showInactive ? "Hide Archived" : "Show Archived"}
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-600">
+              <input
+                type="checkbox"
+                checked={areAllVisibleSelected}
+                onChange={() =>
+                  setSelectedCustomerIds(areAllVisibleSelected ? [] : customers.map((customer) => customer.id))
+                }
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600"
+              />
+              Select all
+            </label>
+            {selectedCustomerIds.length > 0 && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => void handleBulkArchive(false)}>
+                  <Trash2 size={14} /> Archive Selected ({selectedCustomerIds.length})
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => void handleBulkArchive(true)}>
+                  <RotateCcw size={14} /> Restore Selected
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <DataTable
           columns={columns}
@@ -120,7 +251,7 @@ export default function CustomersPage() {
         />
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Add New Customer">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingCustomerId ? "Edit Customer" : "Add New Customer"}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             label="Party Name *"
@@ -136,7 +267,7 @@ export default function CustomersPage() {
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
             placeholder="+91 98765 43210"
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input
               label="City"
               value={form.city}
@@ -166,9 +297,7 @@ export default function CustomersPage() {
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={saving}>
-              Save Customer
-            </Button>
+            <Button type="submit" loading={saving}>{editingCustomerId ? "Save Changes" : "Save Customer"}</Button>
           </div>
         </form>
       </Modal>

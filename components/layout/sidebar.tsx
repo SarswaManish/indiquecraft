@@ -15,6 +15,7 @@ import {
   Send,
   BarChart2,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { Role } from "@prisma/client";
 
@@ -37,7 +38,13 @@ const navItems: NavItem[] = [
   { label: "Reports", href: "/reports", icon: BarChart2, roles: ["ADMIN", "OWNER", "ORDER_MANAGER"] },
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  className,
+  onNavigate,
+}: {
+  className?: string;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const userRole = session?.user?.role as Role | undefined;
@@ -49,7 +56,7 @@ export function Sidebar() {
   });
 
   return (
-    <aside className="w-60 min-h-screen bg-gray-900 flex flex-col">
+    <aside className={cn("min-h-screen bg-gray-900 flex flex-col", className)}>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-gray-800">
         <div className="flex items-center gap-3">
@@ -60,6 +67,16 @@ export function Sidebar() {
             <p className="text-white font-semibold text-sm leading-tight">IndiqueCraft</p>
             <p className="text-gray-400 text-xs">Factory Manager</p>
           </div>
+          {onNavigate && (
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={onNavigate}
+              className="ml-auto rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-800 hover:text-white lg:hidden"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -72,6 +89,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors group",
                 active

@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search") || "";
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "50");
+  const includeInactive = searchParams.get("includeInactive") === "true";
 
   const where = search
     ? {
@@ -28,8 +29,10 @@ export async function GET(req: NextRequest) {
           { phone: { contains: search, mode: "insensitive" as const } },
           { city: { contains: search, mode: "insensitive" as const } },
         ],
-        isActive: true,
+        ...(includeInactive ? {} : { isActive: true }),
       }
+    : includeInactive
+    ? {}
     : { isActive: true };
 
   const [customers, total] = await Promise.all([
