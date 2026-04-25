@@ -51,10 +51,24 @@ export default function NewVendorRequestPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedOrderId) { setOrderItems([]); return; }
-    fetch(`/api/orders/${selectedOrderId}`).then(r => r.json()).then(d => {
-      setOrderItems(d.orderItems || []);
-    });
+    let active = true;
+
+    async function loadOrderItems() {
+      if (!selectedOrderId) {
+        if (active) setOrderItems([]);
+        return;
+      }
+
+      const response = await fetch(`/api/orders/${selectedOrderId}`);
+      const data = await response.json();
+      if (!active) return;
+      setOrderItems(data.orderItems || []);
+    }
+
+    void loadOrderItems();
+    return () => {
+      active = false;
+    };
   }, [selectedOrderId]);
 
   function addItem() { setItems([...items, { ...emptyItem }]); }

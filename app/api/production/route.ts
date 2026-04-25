@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { ProductionStage } from "@prisma/client";
+import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
 
 const stageUpdateSchema = z.object({
   orderItemId: z.string().min(1),
@@ -21,53 +22,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const orderItem = await db.orderItem.findUnique({
-    where: { id: parsed.data.orderItemId },
-    include: { order: true },
-  });
-  if (!orderItem) return NextResponse.json({ error: "Order item not found" }, { status: 404 });
-
-  // Update production stage on the item
-  await db.orderItem.update({
-    where: { id: parsed.data.orderItemId },
-    data: { productionStage: parsed.data.stage },
-  });
-
-  // Log it
-  const log = await db.productionLog.create({
-    data: {
-      orderItemId: parsed.data.orderItemId,
-      stage: parsed.data.stage,
-      updatedById: session.user.id,
-      assignedPerson: parsed.data.assignedPerson,
-      remarks: parsed.data.remarks,
-    },
-  });
-
-  // Auto-update order status based on all items' stages
-  const allItems = await db.orderItem.findMany({
-    where: { orderId: orderItem.orderId },
-  });
-
-  const stages = allItems.map((i) => i.productionStage);
-  let newOrderStatus = orderItem.order.status;
-
-  if (stages.every((s) => s === "COMPLETED")) {
-    newOrderStatus = "READY_TO_DISPATCH";
-  } else if (stages.some((s) => s === "PACKING")) {
-    newOrderStatus = "PACKING";
-  } else if (stages.some((s) => s === "FINISHING")) {
-    newOrderStatus = "FINISHING";
-  } else if (stages.some((s) => ["MANUFACTURING", "PLATING", "POLISHING"].includes(s))) {
-    newOrderStatus = "IN_PRODUCTION";
-  }
-
-  if (newOrderStatus !== orderItem.order.status) {
-    await db.order.update({
-      where: { id: orderItem.orderId },
-      data: { status: newOrderStatus },
+  const log = await db.$transaction(async (tx) => {
+    const orderItem = await tx.orderItem.findUnique({
+      where: { id: parsed.data.orderItemId },
+      select: { id: true, orderId: true },
     });
-  }
+    if (!orderItem) {
+      throw new Error("Order item not found");
+    }
+
+    await tx.orderItem.update({
+      where: { id: parsed.data.orderItemId },
+      data: { productionStage: parsed.data.stage },
+    });
+
+    const log = await tx.productionLog.create({
+      data: {
+        orderItemId: parsed.data.orderItemId,
+        stage: parsed.data.stage,
+        updatedById: session.user.id,
+        assignedPerson: parsed.data.assignedPerson,
+        remarks: parsed.data.remarks,
+      },
+    });
+
+    await recomputeAndPersistOrderStatus(tx, orderItem.orderId);
+    return log;
+  });
 
   return NextResponse.json(log, { status: 201 });
 }

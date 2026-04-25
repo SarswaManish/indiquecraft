@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -40,19 +40,27 @@ export default function DispatchPage() {
   const [loading, setLoading] = useState(true);
   const debouncedSearch = useDebounce(search, 300);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const [ordersRes, dispatchRes] = await Promise.all([
-      fetch(`/api/orders?status=READY_TO_DISPATCH&search=${encodeURIComponent(debouncedSearch)}&limit=50`),
-      fetch("/api/dispatch?limit=20"),
-    ]);
-    const [ordersData, dispatchData] = await Promise.all([ordersRes.json(), dispatchRes.json()]);
-    setReadyOrders(ordersData.orders || []);
-    setRecentDispatches(dispatchData.dispatches || []);
-    setLoading(false);
-  }, [debouncedSearch]);
+  useEffect(() => {
+    let active = true;
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+    async function loadData() {
+      setLoading(true);
+      const [ordersRes, dispatchRes] = await Promise.all([
+        fetch(`/api/orders?status=READY_TO_DISPATCH&search=${encodeURIComponent(debouncedSearch)}&limit=50`),
+        fetch("/api/dispatch?limit=20"),
+      ]);
+      const [ordersData, dispatchData] = await Promise.all([ordersRes.json(), dispatchRes.json()]);
+      if (!active) return;
+      setReadyOrders(ordersData.orders || []);
+      setRecentDispatches(dispatchData.dispatches || []);
+      setLoading(false);
+    }
+
+    void loadData();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch]);
 
   const today = new Date().toISOString().split("T")[0];
   const dispatchedToday = recentDispatches.filter(d => d.dispatchDate.startsWith(today)).length;

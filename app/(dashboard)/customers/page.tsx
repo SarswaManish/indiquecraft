@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -36,16 +36,24 @@ export default function CustomersPage() {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch(`/api/customers?search=${encodeURIComponent(debouncedSearch)}`);
-    const data = await res.json();
-    setCustomers(data.customers || []);
-    setTotal(data.total || 0);
-    setLoading(false);
-  }, [debouncedSearch]);
+  useEffect(() => {
+    let active = true;
 
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+    async function loadCustomers() {
+      setLoading(true);
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(debouncedSearch)}`);
+      const data = await res.json();
+      if (!active) return;
+      setCustomers(data.customers || []);
+      setTotal(data.total || 0);
+      setLoading(false);
+    }
+
+    void loadCustomers();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,7 +66,12 @@ export default function CustomersPage() {
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
-    fetchCustomers();
+    setLoading(true);
+    const res = await fetch(`/api/customers?search=${encodeURIComponent(debouncedSearch)}`);
+    const data = await res.json();
+    setCustomers(data.customers || []);
+    setTotal(data.total || 0);
+    setLoading(false);
   }
 
   const columns = [

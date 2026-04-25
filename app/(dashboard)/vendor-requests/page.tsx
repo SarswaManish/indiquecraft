@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -40,17 +40,25 @@ export default function VendorRequestsPage() {
   const [loading, setLoading] = useState(true);
   const debouncedSearch = useDebounce(search, 300);
 
-  const fetchRequests = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ search: debouncedSearch, status, limit: "50" });
-    const res = await fetch(`/api/vendor-requests?${params}`);
-    const data = await res.json();
-    setRequests(data.requests || []);
-    setTotal(data.total || 0);
-    setLoading(false);
-  }, [debouncedSearch, status]);
+  useEffect(() => {
+    let active = true;
 
-  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+    async function loadRequests() {
+      setLoading(true);
+      const params = new URLSearchParams({ search: debouncedSearch, status, limit: "50" });
+      const res = await fetch(`/api/vendor-requests?${params}`);
+      const data = await res.json();
+      if (!active) return;
+      setRequests(data.requests || []);
+      setTotal(data.total || 0);
+      setLoading(false);
+    }
+
+    void loadRequests();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch, status]);
 
   const columns = [
     { key: "requestNumber", header: "Request #", render: (row: VendorRequest) => (

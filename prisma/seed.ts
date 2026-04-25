@@ -1,9 +1,9 @@
-import { PrismaClient, OrderStatus, VendorRequestStatus, ProductionStage } from "@prisma/client";
+import { Prisma, PrismaClient, OrderStatus, ProductionStage } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL!, ssl: { rejectUnauthorized: false } });
-const db = new PrismaClient({ adapter } as any);
+const db = new PrismaClient({ adapter } satisfies Prisma.PrismaClientOptions);
 
 async function main() {
   console.log("🌱 Seeding IndiqueCraft database...");
@@ -275,7 +275,7 @@ async function main() {
   });
 
   // VR for order 2 (DELAYED - partial receipt)
-  const vr2 = await db.vendorRequest.create({
+  await db.vendorRequest.create({
     data: {
       requestNumber: "VR-26-0002",
       vendorId: vendors[3].id,
@@ -297,7 +297,7 @@ async function main() {
   });
 
   // VR for order 3 (REQUESTED)
-  const vr3 = await db.vendorRequest.create({
+  await db.vendorRequest.create({
     data: {
       requestNumber: "VR-26-0003",
       vendorId: vendors[1].id,
@@ -326,7 +326,7 @@ async function main() {
   });
 
   // VR for order 6 (FOLLOW_UP_PENDING - overdue)
-  const vr4 = await db.vendorRequest.create({
+  await db.vendorRequest.create({
     data: {
       requestNumber: "VR-26-0004",
       vendorId: vendors[3].id,

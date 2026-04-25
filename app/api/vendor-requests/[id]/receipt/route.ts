@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
+import { recomputeAndPersistOrderStatuses } from "@/lib/order-workflow";
+
+function createHttpError(message: string, status = 400) {
+  return Object.assign(new Error(message), { status });
+}
 
 const receiptItemSchema = z.object({
   vendorRequestItemId: z.string().min(1),
@@ -28,67 +33,109 @@ export async function POST(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const vr = await db.vendorRequest.findUnique({
-    where: { id },
-    include: { vendorRequestItems: true },
-  });
-  if (!vr) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const totalReceived = parsed.data.items.reduce((sum, i) => sum + i.qtyReceived, 0);
-
-  await Promise.all(
-    parsed.data.items.map(async (item) => {
-      const vrItem = vr.vendorRequestItems.find((i) => i.id === item.vendorRequestItemId);
-      if (!vrItem) return;
-      const newReceived = vrItem.receivedQty + item.qtyReceived;
-      const newPending = Math.max(0, vrItem.requestedQty - newReceived);
-      await db.vendorRequestItem.update({
-        where: { id: item.vendorRequestItemId },
-        data: { receivedQty: newReceived, pendingQty: newPending },
+  try {
+    const receipt = await db.$transaction(async (tx) => {
+      const vendorRequest = await tx.vendorRequest.findUnique({
+        where: { id },
+        include: {
+          vendorRequestItems: {
+            include: {
+              orderItem: {
+                select: { id: true, orderId: true, productionStage: true },
+              },
+            },
+          },
+        },
       });
-    })
-  );
 
-  const receipt = await db.materialReceipt.create({
-    data: {
-      vendorRequestId: id,
-      receivedDate: parsed.data.receivedDate ? new Date(parsed.data.receivedDate) : new Date(),
-      totalQtyReceived: totalReceived,
-      remarks: parsed.data.remarks,
-    },
-  });
+      if (!vendorRequest) {
+        throw createHttpError("Vendor request not found", 404);
+      }
 
-  const updatedVR = await db.vendorRequest.findUnique({
-    where: { id },
-    include: { vendorRequestItems: true },
-  });
+      const totalReceived = parsed.data.items.reduce((sum, item) => sum + item.qtyReceived, 0);
+      const vendorRequestItemsById = new Map(
+        vendorRequest.vendorRequestItems.map((item) => [item.id, item])
+      );
 
-  if (updatedVR) {
-    const allFullyReceived = updatedVR.vendorRequestItems.every((i) => i.pendingQty === 0);
-    const anyReceived = updatedVR.vendorRequestItems.some((i) => i.receivedQty > 0);
+      for (const receiptItem of parsed.data.items) {
+        const existingItem = vendorRequestItemsById.get(receiptItem.vendorRequestItemId);
+        if (!existingItem) {
+          throw createHttpError("Receipt item does not belong to this vendor request");
+        }
 
-    const newStatus = allFullyReceived
-      ? "FULLY_RECEIVED"
-      : anyReceived
-      ? "PARTIALLY_RECEIVED"
-      : "REQUESTED";
+        if (receiptItem.qtyReceived > existingItem.pendingQty) {
+          throw createHttpError(
+            `Cannot receive ${receiptItem.qtyReceived} units. Only ${existingItem.pendingQty} pending for ${existingItem.materialName}.`
+          );
+        }
 
-    await db.vendorRequest.update({
-      where: { id },
-      data: {
-        status: newStatus,
-        actualReceiptDate: allFullyReceived ? new Date() : undefined,
-      },
+        const newReceivedQty = existingItem.receivedQty + receiptItem.qtyReceived;
+        const newPendingQty = existingItem.requestedQty - newReceivedQty;
+
+        await tx.vendorRequestItem.update({
+          where: { id: receiptItem.vendorRequestItemId },
+          data: {
+            receivedQty: newReceivedQty,
+            pendingQty: newPendingQty,
+          },
+        });
+
+        if (newPendingQty === 0 && existingItem.orderItem.productionStage === "WAITING_MATERIAL") {
+          await tx.orderItem.update({
+            where: { id: existingItem.orderItem.id },
+            data: { productionStage: "NOT_STARTED" },
+          });
+        }
+      }
+
+      const receipt = await tx.materialReceipt.create({
+        data: {
+          vendorRequestId: id,
+          receivedDate: parsed.data.receivedDate ? new Date(parsed.data.receivedDate) : new Date(),
+          totalQtyReceived: totalReceived,
+          remarks: parsed.data.remarks,
+        },
+      });
+
+      const updatedVendorRequest = await tx.vendorRequest.findUniqueOrThrow({
+        where: { id },
+        include: { vendorRequestItems: true },
+      });
+
+      const allFullyReceived = updatedVendorRequest.vendorRequestItems.every(
+        (item) => item.pendingQty === 0
+      );
+      const anyReceived = updatedVendorRequest.vendorRequestItems.some(
+        (item) => item.receivedQty > 0
+      );
+
+      await tx.vendorRequest.update({
+        where: { id },
+        data: {
+          status: allFullyReceived
+            ? "FULLY_RECEIVED"
+            : anyReceived
+            ? "PARTIALLY_RECEIVED"
+            : "REQUESTED",
+          actualReceiptDate: allFullyReceived ? new Date() : null,
+        },
+      });
+
+      await recomputeAndPersistOrderStatuses(
+        tx,
+        vendorRequest.vendorRequestItems.map((item) => item.orderItem.orderId)
+      );
+
+      return receipt;
     });
 
-    if (allFullyReceived) {
-      const orderItemIds = updatedVR.vendorRequestItems.map((i) => i.orderItemId);
-      await db.orderItem.updateMany({
-        where: { id: { in: orderItemIds }, productionStage: "WAITING_MATERIAL" },
-        data: { productionStage: "MANUFACTURING" },
-      });
-    }
+    return NextResponse.json(receipt, { status: 201 });
+  } catch (error) {
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? Number(error.status)
+        : 500;
+    const message = error instanceof Error ? error.message : "Failed to record receipt";
+    return NextResponse.json({ error: message }, { status });
   }
-
-  return NextResponse.json(receipt, { status: 201 });
 }

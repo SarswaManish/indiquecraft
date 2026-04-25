@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
+import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
+
+function createHttpError(message: string, status = 400) {
+  return Object.assign(new Error(message), { status });
+}
 
 const dispatchItemSchema = z.object({
   orderItemId: z.string().min(1),
@@ -27,43 +32,96 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const order = await db.order.findUnique({
-    where: { id: parsed.data.orderId },
-    include: { orderItems: true },
-  });
-  if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+  try {
+    const dispatch = await db.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: parsed.data.orderId },
+        include: {
+          orderItems: {
+            include: {
+              dispatchItems: true,
+            },
+          },
+        },
+      });
 
-  const totalItems = order.orderItems.length;
-  const dispatchedItemIds = parsed.data.items.map((i) => i.orderItemId);
-  const isPartial = dispatchedItemIds.length < totalItems;
+      if (!order) {
+        throw createHttpError("Order not found", 404);
+      }
 
-  const dispatch = await db.dispatch.create({
-    data: {
-      orderId: parsed.data.orderId,
-      dispatchDate: parsed.data.dispatchDate ? new Date(parsed.data.dispatchDate) : new Date(),
-      transporter: parsed.data.transporter,
-      trackingNumber: parsed.data.trackingNumber,
-      remarks: parsed.data.remarks,
-      isPartial,
-      createdById: session.user.id,
-      dispatchItems: {
-        create: parsed.data.items.map((item) => ({
-          orderItemId: item.orderItemId,
-          qtyDispatched: item.qtyDispatched,
-        })),
-      },
-    },
-    include: { dispatchItems: true },
-  });
+      const requestedOrderItemIds = parsed.data.items.map((item) => item.orderItemId);
+      const uniqueOrderItemIds = new Set(requestedOrderItemIds);
+      if (uniqueOrderItemIds.size !== requestedOrderItemIds.length) {
+        throw createHttpError("Duplicate order items are not allowed in one dispatch");
+      }
 
-  // Update order status
-  const newStatus = isPartial ? "DISPATCHED" : "DISPATCHED";
-  await db.order.update({
-    where: { id: parsed.data.orderId },
-    data: { status: newStatus },
-  });
+      const orderItemsById = new Map(order.orderItems.map((item) => [item.id, item]));
 
-  return NextResponse.json(dispatch, { status: 201 });
+      for (const dispatchItem of parsed.data.items) {
+        const orderItem = orderItemsById.get(dispatchItem.orderItemId);
+        if (!orderItem) {
+          throw createHttpError("Dispatch item does not belong to the selected order");
+        }
+
+        if (orderItem.productionStage !== "COMPLETED") {
+          throw createHttpError(`Order item ${orderItem.productId} is not ready for dispatch`);
+        }
+
+        const alreadyDispatchedQty = orderItem.dispatchItems.reduce(
+          (total, item) => total + item.qtyDispatched,
+          0
+        );
+        const remainingQty = orderItem.quantity - alreadyDispatchedQty;
+
+        if (remainingQty <= 0) {
+          throw createHttpError("This order item has already been fully dispatched");
+        }
+
+        if (dispatchItem.qtyDispatched > remainingQty) {
+          throw createHttpError(
+            `Cannot dispatch ${dispatchItem.qtyDispatched} units. Only ${remainingQty} remaining for this item.`
+          );
+        }
+      }
+
+      const dispatch = await tx.dispatch.create({
+        data: {
+          orderId: parsed.data.orderId,
+          dispatchDate: parsed.data.dispatchDate ? new Date(parsed.data.dispatchDate) : new Date(),
+          transporter: parsed.data.transporter,
+          trackingNumber: parsed.data.trackingNumber,
+          remarks: parsed.data.remarks,
+          isPartial: true,
+          createdById: session.user.id,
+          dispatchItems: {
+            create: parsed.data.items.map((item) => ({
+              orderItemId: item.orderItemId,
+              qtyDispatched: item.qtyDispatched,
+            })),
+          },
+        },
+        include: { dispatchItems: true },
+      });
+
+      const nextStatus = await recomputeAndPersistOrderStatus(tx, parsed.data.orderId);
+      const isPartial = nextStatus !== "DISPATCHED";
+
+      return tx.dispatch.update({
+        where: { id: dispatch.id },
+        data: { isPartial },
+        include: { dispatchItems: true },
+      });
+    });
+
+    return NextResponse.json(dispatch, { status: 201 });
+  } catch (error) {
+    const status =
+      typeof error === "object" && error !== null && "status" in error
+        ? Number(error.status)
+        : 500;
+    const message = error instanceof Error ? error.message : "Failed to create dispatch";
+    return NextResponse.json({ error: message }, { status });
+  }
 }
 
 export async function GET(req: NextRequest) {

@@ -78,14 +78,8 @@ export default function LoginPage() {
               Sign in
             </Button>
           </form>
-
           <div className="mt-6 p-3 bg-gray-50 rounded-md text-xs text-gray-500">
-            <strong>Demo accounts:</strong>
-            <div className="mt-1 space-y-0.5">
-              <div>admin@indiquecraft.com / admin123</div>
-              <div>owner@indiquecraft.com / owner123</div>
-              <div>production@indiquecraft.com / prod123</div>
-            </div>
+            Demo login credentials only work if the database has been seeded successfully in this environment.
           </div>
         </div>
       </div>

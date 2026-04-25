@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Select } from "@/components/ui/select";
@@ -29,32 +29,37 @@ export default function ProductionPage() {
   const [stageFilter, setStageFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    // We query orders in production-relevant statuses
-    const params = new URLSearchParams({ limit: "100" });
-    if (!stageFilter || ["IN_PRODUCTION", "FINISHING", "PACKING", "READY_TO_DISPATCH"].includes(stageFilter)) {
-      params.set("status", "IN_PRODUCTION");
-    }
-    const res = await fetch(`/api/orders?${params}`);
-    const data = await res.json();
+  useEffect(() => {
+    let active = true;
 
-    // Flatten order items
-    const allItems: ProductionItem[] = [];
-    for (const order of (data.orders || [])) {
-      // Fetch full order to get items
-      const orderRes = await fetch(`/api/orders/${order.id}`);
-      const orderData = await orderRes.json();
-      for (const item of (orderData.orderItems || [])) {
-        allItems.push({ ...item, order: { ...orderData, orderItems: undefined } });
+    async function loadItems() {
+      setLoading(true);
+      const params = new URLSearchParams({ limit: "100" });
+      if (!stageFilter || ["IN_PRODUCTION", "FINISHING", "PACKING", "READY_TO_DISPATCH"].includes(stageFilter)) {
+        params.set("status", "IN_PRODUCTION");
       }
+      const res = await fetch(`/api/orders?${params}`);
+      const data = await res.json();
+
+      const allItems: ProductionItem[] = [];
+      for (const order of data.orders || []) {
+        const orderRes = await fetch(`/api/orders/${order.id}`);
+        const orderData = await orderRes.json();
+        for (const item of orderData.orderItems || []) {
+          allItems.push({ ...item, order: { ...orderData, orderItems: undefined } });
+        }
+      }
+
+      if (!active) return;
+      setItems(stageFilter ? allItems.filter((item) => item.productionStage === stageFilter) : allItems);
+      setLoading(false);
     }
 
-    setItems(stageFilter ? allItems.filter(i => i.productionStage === stageFilter) : allItems);
-    setLoading(false);
+    void loadItems();
+    return () => {
+      active = false;
+    };
   }, [stageFilter]);
-
-  useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const columns = [
     { key: "product", header: "Product", render: (row: ProductionItem) => (

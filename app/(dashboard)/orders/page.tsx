@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -47,22 +47,30 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const debouncedSearch = useDebounce(search, 300);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      search: debouncedSearch,
-      status,
-      priority,
-      limit: "50",
-    });
-    const res = await fetch(`/api/orders?${params}`);
-    const data = await res.json();
-    setOrders(data.orders || []);
-    setTotal(data.total || 0);
-    setLoading(false);
-  }, [debouncedSearch, status, priority]);
+  useEffect(() => {
+    let active = true;
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+    async function loadOrders() {
+      setLoading(true);
+      const params = new URLSearchParams({
+        search: debouncedSearch,
+        status,
+        priority,
+        limit: "50",
+      });
+      const res = await fetch(`/api/orders?${params}`);
+      const data = await res.json();
+      if (!active) return;
+      setOrders(data.orders || []);
+      setTotal(data.total || 0);
+      setLoading(false);
+    }
+
+    void loadOrders();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch, status, priority]);
 
   const columns = [
     {

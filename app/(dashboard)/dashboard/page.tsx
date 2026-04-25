@@ -19,7 +19,7 @@ import { formatDate, delayedDays } from "@/lib/utils";
 import Link from "next/link";
 
 interface DashboardData {
-  owner: {
+  owner?: {
     totalActiveOrders: number;
     delayedOrders: number;
     rawMaterialPendingOrders: number;
@@ -39,20 +39,20 @@ interface DashboardData {
       vendor: { name: string };
     }>;
   };
-  purchase: {
+  purchase?: {
     pendingVendorRequests: number;
     overdueVendorRequests: number;
     arrivingToday: number;
     partiallyReceived: number;
   };
-  production: {
+  production?: {
     waitingMaterialItems: number;
     inProductionItems: number;
     inPlatingItems: number;
     inFinishingItems: number;
     packedItems: number;
   };
-  dispatch: {
+  dispatch?: {
     readyToDispatchOrders: number;
     dispatchedToday: number;
   };
@@ -96,7 +96,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Owner / Top-level KPIs */}
-      {(showOwner || true) && (
+      {showOwner && data.owner && (
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Overview
@@ -131,7 +131,7 @@ export default function DashboardPage() {
       )}
 
       {/* Purchase KPIs */}
-      {showPurchase && (
+      {showPurchase && data.purchase && (
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Purchase / Vendor
@@ -166,7 +166,7 @@ export default function DashboardPage() {
       )}
 
       {/* Production KPIs */}
-      {showProduction && (
+      {showProduction && data.production && (
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Production Floor
@@ -207,7 +207,7 @@ export default function DashboardPage() {
       )}
 
       {/* Dispatch KPIs */}
-      {showDispatch && (
+      {showDispatch && data.dispatch && (
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
             Dispatch
@@ -232,7 +232,7 @@ export default function DashboardPage() {
       {/* Detail tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Delayed orders */}
-        {data.owner.recentDelayedOrders.length > 0 && (
+        {data.owner && data.owner.recentDelayedOrders.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Delayed Orders</CardTitle>
@@ -268,7 +268,7 @@ export default function DashboardPage() {
         )}
 
         {/* Overdue vendor requests */}
-        {data.owner.overdueVRs.length > 0 && (
+        {data.owner && data.owner.overdueVRs.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Overdue Vendor Requests</CardTitle>

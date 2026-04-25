@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,14 +67,29 @@ export default function VendorRequestDetailPage() {
   const [newStatus, setNewStatus] = useState<VendorRequestStatus>("REQUESTED");
   const [statusSaving, setStatusSaving] = useState(false);
 
-  const fetchVR = useCallback(async () => {
+  async function fetchVR() {
     const res = await fetch(`/api/vendor-requests/${id}`);
     const data = await res.json();
     setVR(data);
     setLoading(false);
-  }, [id]);
+  }
 
-  useEffect(() => { fetchVR(); }, [fetchVR]);
+  useEffect(() => {
+    let active = true;
+
+    async function loadVendorRequest() {
+      const res = await fetch(`/api/vendor-requests/${id}`);
+      const data = await res.json();
+      if (!active) return;
+      setVR(data);
+      setLoading(false);
+    }
+
+    void loadVendorRequest();
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   async function handleReceipt(e: React.FormEvent) {
     e.preventDefault();

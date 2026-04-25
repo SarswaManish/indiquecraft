@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,14 +106,29 @@ export default function OrderDetailPage() {
   const [newStatus, setNewStatus] = useState<OrderStatus>("NEW");
   const [statusSaving, setStatusSaving] = useState(false);
 
-  const fetchOrder = useCallback(async () => {
+  async function fetchOrder() {
     const res = await fetch(`/api/orders/${id}`);
     const data = await res.json();
     setOrder(data);
     setLoading(false);
-  }, [id]);
+  }
 
-  useEffect(() => { fetchOrder(); }, [fetchOrder]);
+  useEffect(() => {
+    let active = true;
+
+    async function loadOrder() {
+      const res = await fetch(`/api/orders/${id}`);
+      const data = await res.json();
+      if (!active) return;
+      setOrder(data);
+      setLoading(false);
+    }
+
+    void loadOrder();
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   async function handleStageUpdate(e: React.FormEvent) {
     e.preventDefault();

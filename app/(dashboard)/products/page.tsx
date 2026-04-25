@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { SearchInput } from "@/components/shared/search-input";
@@ -41,15 +41,23 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch(`/api/products?search=${encodeURIComponent(debouncedSearch)}`);
-    const data = await res.json();
-    setProducts(data.products || []);
-    setLoading(false);
-  }, [debouncedSearch]);
+  useEffect(() => {
+    let active = true;
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+    async function loadProducts() {
+      setLoading(true);
+      const res = await fetch(`/api/products?search=${encodeURIComponent(debouncedSearch)}`);
+      const data = await res.json();
+      if (!active) return;
+      setProducts(data.products || []);
+      setLoading(false);
+    }
+
+    void loadProducts();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -62,7 +70,11 @@ export default function ProductsPage() {
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
-    fetchProducts();
+    setLoading(true);
+    const res = await fetch(`/api/products?search=${encodeURIComponent(debouncedSearch)}`);
+    const data = await res.json();
+    setProducts(data.products || []);
+    setLoading(false);
   }
 
   const columns = [

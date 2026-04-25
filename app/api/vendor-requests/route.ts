@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { VendorRequestStatus } from "@prisma/client";
-import { generateVendorRequestNumber } from "@/lib/utils";
+import { generateNextVendorRequestNumber } from "@/lib/document-numbers";
+import { recomputeAndPersistOrderStatuses } from "@/lib/order-workflow";
 
 const requestItemSchema = z.object({
   orderItemId: z.string().min(1),
@@ -70,30 +71,50 @@ export async function POST(req: NextRequest) {
   }
 
   const { items, ...vrData } = parsed.data;
-  const count = await db.vendorRequest.count();
-  const requestNumber = generateVendorRequestNumber(count + 1);
 
-  const vendorRequest = await db.vendorRequest.create({
-    data: {
-      ...vrData,
-      requestNumber,
-      status: "REQUESTED",
-      requestDate: vrData.requestDate ? new Date(vrData.requestDate) : new Date(),
-      expectedArrivalDate: vrData.expectedArrivalDate
-        ? new Date(vrData.expectedArrivalDate)
-        : undefined,
-      vendorRequestItems: {
-        create: items.map((item) => ({
-          orderItemId: item.orderItemId,
-          materialName: item.materialName,
-          requestedQty: item.requestedQty,
-          pendingQty: item.requestedQty,
-          receivedQty: 0,
-          notes: item.notes,
-        })),
+  const vendorRequest = await db.$transaction(async (tx) => {
+    const requestNumber = await generateNextVendorRequestNumber(tx);
+
+    const createdVendorRequest = await tx.vendorRequest.create({
+      data: {
+        ...vrData,
+        requestNumber,
+        status: "REQUESTED",
+        requestDate: vrData.requestDate ? new Date(vrData.requestDate) : new Date(),
+        expectedArrivalDate: vrData.expectedArrivalDate
+          ? new Date(vrData.expectedArrivalDate)
+          : undefined,
+        vendorRequestItems: {
+          create: items.map((item) => ({
+            orderItemId: item.orderItemId,
+            materialName: item.materialName,
+            requestedQty: item.requestedQty,
+            pendingQty: item.requestedQty,
+            receivedQty: 0,
+            notes: item.notes,
+          })),
+        },
       },
-    },
-    include: { vendorRequestItems: true, vendor: true },
+      include: {
+        vendorRequestItems: {
+          include: {
+            orderItem: {
+              select: { orderId: true },
+            },
+          },
+        },
+      },
+    });
+
+    await recomputeAndPersistOrderStatuses(
+      tx,
+      createdVendorRequest.vendorRequestItems.map((item) => item.orderItem.orderId)
+    );
+
+    return tx.vendorRequest.findUniqueOrThrow({
+      where: { id: createdVendorRequest.id },
+      include: { vendorRequestItems: true, vendor: true },
+    });
   });
 
   return NextResponse.json(vendorRequest, { status: 201 });

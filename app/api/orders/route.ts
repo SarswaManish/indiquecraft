@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { FinishType, OrderPriority, OrderSource, OrderStatus } from "@prisma/client";
-import { generateOrderNumber } from "@/lib/utils";
+import { generateNextOrderNumber } from "@/lib/document-numbers";
+import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
 
 const orderItemSchema = z.object({
   productId: z.string().min(1),
@@ -78,39 +79,41 @@ export async function POST(req: NextRequest) {
 
   const { items, ...orderData } = parsed.data;
 
-  // Generate sequential order number
-  const count = await db.order.count();
-  const orderNumber = generateOrderNumber(count + 1);
+  const order = await db.$transaction(async (tx) => {
+    const orderNumber = await generateNextOrderNumber(tx);
 
-  // Determine if any item needs raw material
-  const needsMaterial = items.some((i) => i.rawMaterialRequired);
-  const initialStatus: OrderStatus = needsMaterial ? "RAW_MATERIAL_PENDING" : "NEW";
-
-  const order = await db.order.create({
-    data: {
-      ...orderData,
-      orderNumber,
-      status: initialStatus,
-      orderDate: orderData.orderDate ? new Date(orderData.orderDate) : new Date(),
-      promisedDeliveryDate: orderData.promisedDeliveryDate
-        ? new Date(orderData.promisedDeliveryDate)
-        : undefined,
-      orderItems: {
-        create: items.map((item) => ({
-          productId: item.productId,
-          size: item.size,
-          quantity: item.quantity,
-          finishType: item.finishType,
-          rawMaterialRequired: item.rawMaterialRequired,
-          notes: item.notes,
-          productionStage: item.rawMaterialRequired ? "WAITING_MATERIAL" : "NOT_STARTED",
-        })),
+    const createdOrder = await tx.order.create({
+      data: {
+        ...orderData,
+        orderNumber,
+        status: "NEW",
+        orderDate: orderData.orderDate ? new Date(orderData.orderDate) : new Date(),
+        promisedDeliveryDate: orderData.promisedDeliveryDate
+          ? new Date(orderData.promisedDeliveryDate)
+          : undefined,
+        orderItems: {
+          create: items.map((item) => ({
+            productId: item.productId,
+            size: item.size,
+            quantity: item.quantity,
+            finishType: item.finishType,
+            rawMaterialRequired: item.rawMaterialRequired,
+            notes: item.notes,
+            productionStage: item.rawMaterialRequired ? "WAITING_MATERIAL" : "NOT_STARTED",
+          })),
+        },
       },
-    },
-    include: {
-      orderItems: true,
-      customer: true,
-    },
+    });
+
+    await recomputeAndPersistOrderStatus(tx, createdOrder.id);
+
+    return tx.order.findUniqueOrThrow({
+      where: { id: createdOrder.id },
+      include: {
+        orderItems: true,
+        customer: true,
+      },
+    });
   });
 
   return NextResponse.json(order, { status: 201 });

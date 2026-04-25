@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -38,15 +38,23 @@ export default function VendorsPage() {
   const [saving, setSaving] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
 
-  const fetchVendors = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch(`/api/vendors?search=${encodeURIComponent(debouncedSearch)}`);
-    const data = await res.json();
-    setVendors(data.vendors || []);
-    setLoading(false);
-  }, [debouncedSearch]);
+  useEffect(() => {
+    let active = true;
 
-  useEffect(() => { fetchVendors(); }, [fetchVendors]);
+    async function loadVendors() {
+      setLoading(true);
+      const res = await fetch(`/api/vendors?search=${encodeURIComponent(debouncedSearch)}`);
+      const data = await res.json();
+      if (!active) return;
+      setVendors(data.vendors || []);
+      setLoading(false);
+    }
+
+    void loadVendors();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearch]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,7 +67,11 @@ export default function VendorsPage() {
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
-    fetchVendors();
+    setLoading(true);
+    const res = await fetch(`/api/vendors?search=${encodeURIComponent(debouncedSearch)}`);
+    const data = await res.json();
+    setVendors(data.vendors || []);
+    setLoading(false);
   }
 
   const columns = [
