@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma, ProductionStage } from "@prisma/client";
+import { Prisma, ProductionStage, Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { getReportsCache, setReportsCache } from "@/lib/server-cache";
 
 type ReportType =
   | "order-aging"
@@ -26,12 +27,23 @@ function getPagination(searchParams: URLSearchParams) {
 export async function GET(req: NextRequest) {
   const session = await getAuthSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = session.user.role as Role;
 
   const { searchParams } = new URL(req.url);
   const type = (searchParams.get("type") || "order-aging") as ReportType;
   const from = searchParams.get("from");
   const to = searchParams.get("to");
   const { page, limit, skip } = getPagination(searchParams);
+  const querySignature = searchParams.toString() || `type=${type}`;
+
+  const cached = await getReportsCache<Record<string, unknown>>(role, querySignature);
+  if (cached) {
+    return NextResponse.json(cached, {
+      headers: {
+        "x-cache": "redis-hit",
+      },
+    });
+  }
 
   const dateFilter =
     from && to
@@ -55,7 +67,7 @@ export async function GET(req: NextRequest) {
       db.order.count({ where }),
     ]);
 
-    return NextResponse.json({
+    const response = {
       orders,
       meta: {
         total,
@@ -63,7 +75,9 @@ export async function GET(req: NextRequest) {
         limit,
         activeOrders: total,
       },
-    });
+    };
+    await setReportsCache(role, querySignature, response);
+    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "vendor-pending") {
@@ -92,7 +106,7 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    return NextResponse.json({
+    const response = {
       requests,
       meta: {
         total,
@@ -100,7 +114,9 @@ export async function GET(req: NextRequest) {
         limit,
         overdue,
       },
-    });
+    };
+    await setReportsCache(role, querySignature, response);
+    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "delayed-orders") {
@@ -121,7 +137,7 @@ export async function GET(req: NextRequest) {
       db.order.count({ where }),
     ]);
 
-    return NextResponse.json({
+    const response = {
       orders,
       meta: {
         total,
@@ -129,7 +145,9 @@ export async function GET(req: NextRequest) {
         limit,
         overdue: total,
       },
-    });
+    };
+    await setReportsCache(role, querySignature, response);
+    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "raw-material-pending") {
@@ -163,7 +181,7 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    return NextResponse.json({
+    const response = {
       items,
       meta: {
         total,
@@ -171,7 +189,9 @@ export async function GET(req: NextRequest) {
         limit,
         withoutRequest,
       },
-    });
+    };
+    await setReportsCache(role, querySignature, response);
+    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "dispatch-summary") {
@@ -193,7 +213,7 @@ export async function GET(req: NextRequest) {
       db.dispatch.count({ where: { ...where, isPartial: true } }),
     ]);
 
-    return NextResponse.json({
+    const response = {
       dispatches,
       meta: {
         total,
@@ -201,7 +221,9 @@ export async function GET(req: NextRequest) {
         limit,
         partial,
       },
-    });
+    };
+    await setReportsCache(role, querySignature, response);
+    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   if (type === "customer-history") {
@@ -226,14 +248,16 @@ export async function GET(req: NextRequest) {
       db.order.count({ where }),
     ]);
 
-    return NextResponse.json({
+    const response = {
       orders,
       meta: {
         total,
         page,
         limit,
       },
-    });
+    };
+    await setReportsCache(role, querySignature, response);
+    return NextResponse.json(response, { headers: { "x-cache": "redis-miss" } });
   }
 
   return NextResponse.json({ error: "Unknown report type" }, { status: 400 });

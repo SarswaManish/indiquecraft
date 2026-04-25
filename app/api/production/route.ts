@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
-import { OrderStatus, Prisma, ProductionStage } from "@prisma/client";
+import { OrderStatus, Prisma, ProductionStage, Role } from "@prisma/client";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { invalidateDashboardCache } from "@/lib/server-cache";
+import {
+  getProductionQueueCache,
+  invalidateReadCaches,
+  setProductionQueueCache,
+} from "@/lib/server-cache";
 
 const stageUpdateSchema = z.object({
   orderItemId: z.string().min(1),
@@ -52,7 +56,7 @@ export async function POST(req: NextRequest) {
     return log;
   });
 
-  await invalidateDashboardCache();
+  await invalidateReadCaches();
 
   return NextResponse.json(log, { status: 201 });
 }
@@ -60,6 +64,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const session = await getAuthSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = session.user.role as Role;
 
   const { searchParams } = new URL(req.url);
   const view = searchParams.get("view");
@@ -78,6 +83,16 @@ export async function GET(req: NextRequest) {
   ];
 
   if (view === "queue") {
+    const querySignature = searchParams.toString() || "view=queue";
+    const cached = await getProductionQueueCache<Record<string, unknown>>(role, querySignature);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: {
+          "x-cache": "redis-hit",
+        },
+      });
+    }
+
     const where: Prisma.OrderItemWhereInput = {
       order: {
         status: {
@@ -125,7 +140,13 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    return NextResponse.json({ items, total, page, limit, stageCounts });
+    const response = { items, total, page, limit, stageCounts };
+    await setProductionQueueCache(role, querySignature, response);
+    return NextResponse.json(response, {
+      headers: {
+        "x-cache": "redis-miss",
+      },
+    });
   }
 
   const where: Record<string, unknown> = {};

@@ -6,7 +6,7 @@ import { VendorRequestStatus } from "@prisma/client";
 import { generateNextVendorRequestNumber } from "@/lib/document-numbers";
 import { recomputeAndPersistOrderStatuses } from "@/lib/order-workflow";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { invalidateDashboardCache } from "@/lib/server-cache";
+import { invalidateReadCaches } from "@/lib/server-cache";
 
 const requestItemSchema = z.object({
   orderItemId: z.string().min(1),
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     });
   });
 
-  await invalidateDashboardCache();
+  await invalidateReadCaches();
 
   return NextResponse.json(vendorRequest, { status: 201 });
 }

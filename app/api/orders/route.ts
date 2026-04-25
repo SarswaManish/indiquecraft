@@ -6,7 +6,7 @@ import { FinishType, OrderPriority, OrderSource, OrderStatus } from "@prisma/cli
 import { generateNextOrderNumber } from "@/lib/document-numbers";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { invalidateDashboardCache } from "@/lib/server-cache";
+import { invalidateReadCaches } from "@/lib/server-cache";
 
 const orderItemSchema = z.object({
   productId: z.string().min(1),
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     });
   });
 
-  await invalidateDashboardCache();
+  await invalidateReadCaches();
 
   return NextResponse.json(order, { status: 201 });
 }
