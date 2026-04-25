@@ -4,6 +4,7 @@ import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { OrderStatus, Prisma, ProductionStage } from "@prisma/client";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const stageUpdateSchema = z.object({
   orderItemId: z.string().min(1),
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
   const orderItemId = searchParams.get("orderItemId");
   const stage = searchParams.get("stage");
   const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  const limit = parseInt(searchParams.get("limit") || String(DEFAULT_PAGE_SIZE));
   const activeOrderStatuses: OrderStatus[] = [
     "RAW_MATERIAL_PENDING",
     "MATERIAL_RECEIVED",

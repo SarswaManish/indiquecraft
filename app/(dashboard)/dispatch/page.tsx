@@ -8,6 +8,7 @@ import { Pagination } from "@/components/shared/pagination";
 import { SearchInput } from "@/components/shared/search-input";
 import { StatCard } from "@/components/shared/stat-card";
 import { OrderStatusBadge } from "@/components/shared/status-badge";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { formatDate } from "@/lib/utils";
 import { Send, CheckCircle, Package, ArrowRight } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -33,6 +34,9 @@ interface DispatchRecord {
   createdBy: { name: string } | null;
 }
 
+const READY_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+const DISPATCH_PAGE_SIZE = DEFAULT_PAGE_SIZE;
+
 export default function DispatchPage() {
   const router = useRouter();
   const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
@@ -44,8 +48,6 @@ export default function DispatchPage() {
   const [dispatchPage, setDispatchPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const debouncedSearch = useDebounce(search, 300);
-  const READY_PAGE_SIZE = 12;
-  const DISPATCH_PAGE_SIZE = 12;
 
   useEffect(() => {
     let active = true;

@@ -14,6 +14,7 @@ import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { FINISH_TYPE_LABELS } from "@/lib/constants";
 import { useToast } from "@/lib/toast-context";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { FinishType } from "@prisma/client";
 
 interface Product {
@@ -28,7 +29,7 @@ interface Product {
 }
 
 const finishOptions = Object.entries(FINISH_TYPE_LABELS).map(([value, label]) => ({ value, label }));
-const PAGE_SIZE = 15;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 const emptyForm = {
   sku: "", name: "", category: "", defaultSize: "", finishType: "PLAIN" as FinishType,

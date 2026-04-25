@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 function createHttpError(message: string, status = 400) {
   return Object.assign(new Error(message), { status });
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
   const orderId = searchParams.get("orderId");
   const date = searchParams.get("date");
   const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  const limit = parseInt(searchParams.get("limit") || String(DEFAULT_PAGE_SIZE));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};

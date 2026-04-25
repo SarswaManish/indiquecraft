@@ -14,6 +14,7 @@ import { Pencil, Plus, Phone, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/lib/toast-context";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 interface Vendor {
   id: string;
@@ -30,7 +31,7 @@ const emptyForm = {
   name: "", phone: "", whatsappNumber: "", city: "",
   materialSupplied: "", standardLeadDays: 7, notes: "",
 };
-const PAGE_SIZE = 15;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export default function VendorsPage() {
   const router = useRouter();

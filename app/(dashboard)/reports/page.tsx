@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { OrderStatusBadge, VendorStatusBadge } from "@/components/shared/status-badge";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { delayedDays, formatDate } from "@/lib/utils";
 
 const reportTypes = [
@@ -22,7 +23,7 @@ const reportTypes = [
   { value: "dispatch-summary", label: "Dispatch Summary" },
 ] as const;
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 type ReportType = (typeof reportTypes)[number]["value"];
 

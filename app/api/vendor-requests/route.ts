@@ -5,6 +5,7 @@ import { z } from "zod";
 import { VendorRequestStatus } from "@prisma/client";
 import { generateNextVendorRequestNumber } from "@/lib/document-numbers";
 import { recomputeAndPersistOrderStatuses } from "@/lib/order-workflow";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const requestItemSchema = z.object({
   orderItemId: z.string().min(1),
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status") || "";
   const vendorId = searchParams.get("vendorId") || "";
   const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  const limit = parseInt(searchParams.get("limit") || String(DEFAULT_PAGE_SIZE));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};

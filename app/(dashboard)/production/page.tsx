@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ProductionStageBadge, OrderStatusBadge } from "@/components/shared/status-badge";
 import { PRIORITY_COLORS, PRIORITY_LABELS, PRODUCTION_STAGE_LABELS } from "@/lib/constants";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { cn, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { OrderPriority, ProductionStage } from "@prisma/client";
@@ -35,6 +36,8 @@ const stageFilterOptions = [
   ...Object.entries(PRODUCTION_STAGE_LABELS).map(([v, l]) => ({ value: v, label: l })),
 ];
 
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
+
 export default function ProductionPage() {
   const [items, setItems] = useState<ProductionItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -43,7 +46,6 @@ export default function ProductionPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const PAGE_SIZE = 16;
 
   useEffect(() => {
     let active = true;

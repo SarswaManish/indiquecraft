@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { VendorStatusBadge } from "@/components/shared/status-badge";
 import { formatDate, delayedDays } from "@/lib/utils";
 import { VENDOR_STATUS_LABELS } from "@/lib/constants";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 import { Plus, AlertTriangle } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import Link from "next/link";
@@ -31,7 +32,7 @@ const statusOptions = [
   ...Object.entries(VENDOR_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l })),
 ];
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 export default function VendorRequestsPage() {
   const router = useRouter();

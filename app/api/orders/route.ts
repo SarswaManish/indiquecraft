@@ -5,6 +5,7 @@ import { z } from "zod";
 import { FinishType, OrderPriority, OrderSource, OrderStatus } from "@prisma/client";
 import { generateNextOrderNumber } from "@/lib/document-numbers";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const orderItemSchema = z.object({
   productId: z.string().min(1),
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
   const priority = searchParams.get("priority") || "";
   const customerId = searchParams.get("customerId") || "";
   const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  const limit = parseInt(searchParams.get("limit") || String(DEFAULT_PAGE_SIZE));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {};

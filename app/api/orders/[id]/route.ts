@@ -124,7 +124,7 @@ export async function PATCH(
   }
 
   try {
-    const order = await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       const existingOrder = await tx.order.findUnique({
         where: { id },
         include: {
@@ -253,36 +253,39 @@ export async function PATCH(
       }
 
       await recomputeAndPersistOrderStatus(tx, id);
+    }, {
+      timeout: 15000,
+      maxWait: 10000,
+    });
 
-      return tx.order.findUniqueOrThrow({
-        where: { id },
-        include: {
-          customer: true,
-          orderItems: {
-            include: {
-              product: true,
-              vendorRequestItems: {
-                include: { vendorRequest: { include: { vendor: true } } },
-              },
-              productionLogs: {
-                orderBy: { loggedAt: "desc" },
-                take: 5,
-                include: { updatedBy: { select: { name: true } } },
-              },
-              dispatchItems: {
-                include: { dispatch: true },
-              },
+    const order = await db.order.findUniqueOrThrow({
+      where: { id },
+      include: {
+        customer: true,
+        orderItems: {
+          include: {
+            product: true,
+            vendorRequestItems: {
+              include: { vendorRequest: { include: { vendor: true } } },
             },
-          },
-          dispatches: {
-            orderBy: { dispatchDate: "desc" },
-            include: {
-              dispatchItems: { include: { orderItem: { include: { product: true } } } },
-              createdBy: { select: { name: true } },
+            productionLogs: {
+              orderBy: { loggedAt: "desc" },
+              take: 5,
+              include: { updatedBy: { select: { name: true } } },
+            },
+            dispatchItems: {
+              include: { dispatch: true },
             },
           },
         },
-      });
+        dispatches: {
+          orderBy: { dispatchDate: "desc" },
+          include: {
+            dispatchItems: { include: { orderItem: { include: { product: true } } } },
+            createdBy: { select: { name: true } },
+          },
+        },
+      },
     });
 
     return NextResponse.json(order);

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { FinishType } from "@prisma/client";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const productSchema = z.object({
   sku: z.string().min(1),
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search") || "";
   const category = searchParams.get("category") || "";
   const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "20");
+  const limit = parseInt(searchParams.get("limit") || String(DEFAULT_PAGE_SIZE));
   const includeInactive = searchParams.get("includeInactive") === "true";
 
   const where: Record<string, unknown> = includeInactive ? {} : { isActive: true };

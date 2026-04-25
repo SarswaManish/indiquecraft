@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
+import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
 
 const customerSchema = z.object({
   partyName: z.string().min(1),
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
   const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "50");
+  const limit = parseInt(searchParams.get("limit") || String(DEFAULT_PAGE_SIZE));
   const includeInactive = searchParams.get("includeInactive") === "true";
 
   const where = search
