@@ -58,8 +58,51 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
+  const view = searchParams.get("view");
   const orderId = searchParams.get("orderId");
   const orderItemId = searchParams.get("orderItemId");
+  const stage = searchParams.get("stage");
+
+  if (view === "queue") {
+    const items = await db.orderItem.findMany({
+      where: {
+        order: {
+          status: {
+            in: [
+              "RAW_MATERIAL_PENDING",
+              "MATERIAL_RECEIVED",
+              "IN_PRODUCTION",
+              "FINISHING",
+              "PACKING",
+              "READY_TO_DISPATCH",
+            ],
+          },
+        },
+        ...(stage ? { productionStage: stage as ProductionStage } : {}),
+      },
+      orderBy: [
+        { order: { promisedDeliveryDate: "asc" } },
+        { updatedAt: "desc" },
+      ],
+      include: {
+        product: { select: { name: true, sku: true } },
+        vendorRequestItems: { select: { pendingQty: true } },
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            priority: true,
+            promisedDeliveryDate: true,
+            customer: { select: { partyName: true } },
+          },
+        },
+      },
+      take: 200,
+    });
+
+    return NextResponse.json({ items });
+  }
 
   const where: Record<string, unknown> = {};
   if (orderId) {

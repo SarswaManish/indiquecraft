@@ -9,12 +9,12 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
   return (
-    <div className={cn("flex items-start justify-between mb-6", className)}>
+    <div className={cn("mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between", className)}>
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
         {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-3">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}
     </div>
   );
 }

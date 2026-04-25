@@ -30,18 +30,21 @@ export function StatCard({
 }: StatCardProps) {
   const c = colorMap[color];
   return (
-    <div className={cn("bg-white rounded-lg border border-gray-200 p-5", className)}>
-      <div className="flex items-center justify-between">
+    <div className={cn("rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-gray-300", className)}>
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-gray-500">{title}</p>
+          <p className="text-sm font-medium text-gray-500">{title}</p>
           <p className={cn("text-3xl font-bold mt-1", c.text)}>{value}</p>
           {subtext && <p className="text-xs text-gray-400 mt-1">{subtext}</p>}
         </div>
         {Icon && (
-          <div className={cn("p-3 rounded-full", c.icon)}>
+          <div className={cn("rounded-2xl p-3 ring-1 ring-black/5", c.icon)}>
             <Icon size={22} />
           </div>
         )}
+      </div>
+      <div className={cn("mt-4 h-1.5 rounded-full", c.bg)}>
+        <div className={cn("h-1.5 rounded-full opacity-35", c.icon.split(" ").at(-1))} />
       </div>
     </div>
   );

@@ -60,6 +60,9 @@ interface OrderDetail {
       remarks: string | null;
       updatedBy: { name: string } | null;
     }>;
+    dispatchItems: Array<{
+      qtyDispatched: number;
+    }>;
   }>;
   dispatches: Array<{
     id: string;
@@ -101,6 +104,8 @@ export default function OrderDetailPage() {
     selectedItems: {} as Record<string, number>,
   });
   const [dispatchSaving, setDispatchSaving] = useState(false);
+  const [dispatchError, setDispatchError] = useState("");
+  const [stageError, setStageError] = useState("");
 
   // Status update
   const [newStatus, setNewStatus] = useState<OrderStatus>("NEW");
@@ -134,33 +139,58 @@ export default function OrderDetailPage() {
     e.preventDefault();
     if (!stageModal) return;
     setStageSaving(true);
-    await fetch("/api/production", {
+    setStageError("");
+    const response = await fetch("/api/production", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderItemId: stageModal.itemId, ...stageForm }),
     });
+    if (!response.ok) {
+      const error = await response.json();
+      setStageError(error.error || "Unable to update stage");
+      setStageSaving(false);
+      return;
+    }
     setStageSaving(false);
     setStageModal(null);
-    fetchOrder();
+    void fetchOrder();
   }
 
   async function handleDispatch(e: React.FormEvent) {
     e.preventDefault();
     setDispatchSaving(true);
+    setDispatchError("");
     const items = Object.entries(dispatchForm.selectedItems)
       .filter(([, qty]) => qty > 0)
       .map(([orderItemId, qtyDispatched]) => ({ orderItemId, qtyDispatched }));
 
-    if (items.length === 0) { setDispatchSaving(false); return; }
+    if (items.length === 0) {
+      setDispatchError("Select at least one line item quantity to dispatch.");
+      setDispatchSaving(false);
+      return;
+    }
 
-    await fetch("/api/dispatch", {
+    const response = await fetch("/api/dispatch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderId: id, ...dispatchForm, items }),
     });
+    if (!response.ok) {
+      const error = await response.json();
+      setDispatchError(error.error || "Unable to create dispatch");
+      setDispatchSaving(false);
+      return;
+    }
     setDispatchSaving(false);
     setDispatchModal(false);
-    fetchOrder();
+    setDispatchForm({
+      dispatchDate: new Date().toISOString().split("T")[0],
+      transporter: "",
+      trackingNumber: "",
+      remarks: "",
+      selectedItems: {},
+    });
+    void fetchOrder();
   }
 
   async function handleStatusUpdate() {
@@ -179,6 +209,19 @@ export default function OrderDetailPage() {
   if (!order) return <div className="text-center py-16 text-gray-500">Order not found.</div>;
 
   const delayDays = delayedDays(order.promisedDeliveryDate);
+  const totalQuantity = order.orderItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalDispatchedQuantity = order.orderItems.reduce(
+    (sum, item) =>
+      sum +
+      item.dispatchItems.reduce((itemSum, dispatchItem) => itemSum + dispatchItem.qtyDispatched, 0),
+    0
+  );
+  const blockedItems = order.orderItems.filter(
+    (item) =>
+      item.rawMaterialRequired &&
+      item.vendorRequestItems.some((requestItem) => requestItem.pendingQty > 0)
+  ).length;
+  const readyItems = order.orderItems.filter((item) => item.productionStage === "COMPLETED").length;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -220,6 +263,24 @@ export default function OrderDetailPage() {
               <AlertTriangle size={11} /> {delayDays}d overdue
             </p>
           )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Material Watch</p>
+          <p className="mt-2 text-2xl font-bold text-amber-900">{blockedItems}</p>
+          <p className="mt-1 text-sm text-amber-800">items still blocked waiting for vendor material</p>
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Ready Items</p>
+          <p className="mt-2 text-2xl font-bold text-emerald-900">{readyItems}/{order.orderItems.length}</p>
+          <p className="mt-1 text-sm text-emerald-800">items completed and ready for dispatch planning</p>
+        </div>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Dispatch Progress</p>
+          <p className="mt-2 text-2xl font-bold text-blue-900">{totalDispatchedQuantity}/{totalQuantity}</p>
+          <p className="mt-1 text-sm text-blue-800">units already dispatched from this order</p>
         </div>
       </div>
 
@@ -400,6 +461,11 @@ export default function OrderDetailPage() {
               onChange={(e) => setStageForm({ ...stageForm, remarks: e.target.value })}
               placeholder="Any notes"
             />
+            {stageError && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {stageError}
+              </div>
+            )}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setStageModal(null)}>Cancel</Button>
               <Button type="submit" loading={stageSaving}>Update Stage</Button>
@@ -435,18 +501,21 @@ export default function OrderDetailPage() {
             <p className="text-sm font-medium text-gray-700 mb-2">Items to Dispatch</p>
             <div className="space-y-2">
               {order.orderItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md gap-3">
                   <div>
                     <p className="text-sm font-medium">{item.product.name}</p>
-                    <p className="text-xs text-gray-500">Total qty: {item.quantity}</p>
+                    <p className="text-xs text-gray-500">
+                      Total {item.quantity} · Dispatched {item.dispatchItems.reduce((sum, dispatchItem) => sum + dispatchItem.qtyDispatched, 0)} · Remaining {item.quantity - item.dispatchItems.reduce((sum, dispatchItem) => sum + dispatchItem.qtyDispatched, 0)}
+                    </p>
                   </div>
                   <Input
                     type="number"
                     min={0}
-                    max={item.quantity}
+                    max={item.quantity - item.dispatchItems.reduce((sum, dispatchItem) => sum + dispatchItem.qtyDispatched, 0)}
                     placeholder="Qty"
                     className="w-20"
                     value={dispatchForm.selectedItems[item.id] || 0}
+                    disabled={item.quantity - item.dispatchItems.reduce((sum, dispatchItem) => sum + dispatchItem.qtyDispatched, 0) === 0}
                     onChange={(e) => setDispatchForm({
                       ...dispatchForm,
                       selectedItems: { ...dispatchForm.selectedItems, [item.id]: parseInt(e.target.value) || 0 },
@@ -456,6 +525,11 @@ export default function OrderDetailPage() {
               ))}
             </div>
           </div>
+          {dispatchError && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {dispatchError}
+            </div>
+          )}
           <Textarea
             label="Remarks"
             value={dispatchForm.remarks}

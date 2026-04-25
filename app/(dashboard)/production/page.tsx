@@ -4,19 +4,29 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { ProductionStageBadge, OrderStatusBadge } from "@/components/shared/status-badge";
-import { PRODUCTION_STAGE_LABELS } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
+import { PRIORITY_COLORS, PRIORITY_LABELS, PRODUCTION_STAGE_LABELS } from "@/lib/constants";
+import { cn, formatDate } from "@/lib/utils";
 import Link from "next/link";
-import { ProductionStage } from "@prisma/client";
+import { OrderPriority, ProductionStage } from "@prisma/client";
+import { Search } from "lucide-react";
 
 interface ProductionItem {
   id: string;
   productionStage: ProductionStage;
   quantity: number;
   size: string | null;
+  vendorRequestItems: Array<{ pendingQty: number }>;
   product: { name: string; sku: string };
-  order: { id: string; orderNumber: string; status: string; promisedDeliveryDate: string | null; customer: { partyName: string } };
+  order: {
+    id: string;
+    orderNumber: string;
+    status: string;
+    priority: OrderPriority;
+    promisedDeliveryDate: string | null;
+    customer: { partyName: string };
+  };
 }
 
 const stageFilterOptions = [
@@ -27,6 +37,7 @@ const stageFilterOptions = [
 export default function ProductionPage() {
   const [items, setItems] = useState<ProductionItem[]>([]);
   const [stageFilter, setStageFilter] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,24 +45,15 @@ export default function ProductionPage() {
 
     async function loadItems() {
       setLoading(true);
-      const params = new URLSearchParams({ limit: "100" });
-      if (!stageFilter || ["IN_PRODUCTION", "FINISHING", "PACKING", "READY_TO_DISPATCH"].includes(stageFilter)) {
-        params.set("status", "IN_PRODUCTION");
+      const params = new URLSearchParams({ view: "queue" });
+      if (stageFilter) {
+        params.set("stage", stageFilter);
       }
-      const res = await fetch(`/api/orders?${params}`);
+      const res = await fetch(`/api/production?${params}`);
       const data = await res.json();
 
-      const allItems: ProductionItem[] = [];
-      for (const order of data.orders || []) {
-        const orderRes = await fetch(`/api/orders/${order.id}`);
-        const orderData = await orderRes.json();
-        for (const item of orderData.orderItems || []) {
-          allItems.push({ ...item, order: { ...orderData, orderItems: undefined } });
-        }
-      }
-
       if (!active) return;
-      setItems(stageFilter ? allItems.filter((item) => item.productionStage === stageFilter) : allItems);
+      setItems(data.items || []);
       setLoading(false);
     }
 
@@ -60,6 +62,17 @@ export default function ProductionPage() {
       active = false;
     };
   }, [stageFilter]);
+
+  const filteredItems = items.filter((item) => {
+    const term = search.trim().toLowerCase();
+    if (!term) return true;
+    return [
+      item.product.name,
+      item.product.sku,
+      item.order.orderNumber,
+      item.order.customer.partyName,
+    ].some((value) => value.toLowerCase().includes(term));
+  });
 
   const columns = [
     { key: "product", header: "Product", render: (row: ProductionItem) => (
@@ -77,9 +90,22 @@ export default function ProductionPage() {
     { key: "qty", header: "Qty", render: (row: ProductionItem) => (
       <span>{row.quantity}{row.size ? ` / ${row.size}` : ""}</span>
     )},
+    { key: "priority", header: "Priority", render: (row: ProductionItem) => (
+      <span className={cn("inline-flex rounded-full px-2 py-1 text-xs font-medium", PRIORITY_COLORS[row.order.priority])}>
+        {PRIORITY_LABELS[row.order.priority]}
+      </span>
+    )},
     { key: "stage", header: "Stage", render: (row: ProductionItem) => (
       <ProductionStageBadge stage={row.productionStage} />
     )},
+    { key: "material", header: "Material", render: (row: ProductionItem) => {
+      const pending = row.vendorRequestItems.reduce((sum, requestItem) => sum + requestItem.pendingQty, 0);
+      return pending > 0 ? (
+        <span className="text-xs font-medium text-amber-700">Pending {pending}</span>
+      ) : (
+        <span className="text-xs font-medium text-emerald-700">Ready</span>
+      );
+    }},
     { key: "dueDate", header: "Due", render: (row: ProductionItem) => (
       <span className="text-sm">{formatDate(row.order.promisedDeliveryDate)}</span>
     )},
@@ -96,7 +122,10 @@ export default function ProductionPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Production Floor" description="Track all order items through production stages" />
+      <PageHeader
+        title="Production Floor"
+        description="Fast item-level queue for your factory floor, without per-order loading delays."
+      />
 
       {/* Stage summary */}
       <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
@@ -115,18 +144,27 @@ export default function ProductionPage() {
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search order, customer, product or SKU..."
+              className="pl-9"
+            />
+          </div>
           <Select
             options={stageFilterOptions}
             value={stageFilter}
             onChange={(e) => setStageFilter(e.target.value)}
             className="w-52"
           />
-          <span className="text-sm text-gray-500">{items.length} items</span>
+          <span className="text-sm text-gray-500">{filteredItems.length} items</span>
         </div>
         <DataTable
           columns={columns}
-          data={items}
+          data={filteredItems}
           loading={loading}
           emptyMessage="No items in production"
         />
