@@ -255,6 +255,9 @@ export default function OrderDetailPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => router.back()}><ArrowLeft size={16} /> Back</Button>
+            <Link href={`/orders/${id}/edit`}>
+              <Button variant="outline">Edit Order</Button>
+            </Link>
             <Button variant="secondary" onClick={() => { setNewStatus(order.status); setStatusModal(true); }}>
               Update Status
             </Button>
