@@ -1,15 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma, ProductionStage } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
+
+type ReportType =
+  | "order-aging"
+  | "delayed-orders"
+  | "vendor-pending"
+  | "raw-material-pending"
+  | "dispatch-summary"
+  | "customer-history";
+
+function getPagination(searchParams: URLSearchParams) {
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
+
+  return {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+  };
+}
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const type = searchParams.get("type") || "order-aging";
+  const type = (searchParams.get("type") || "order-aging") as ReportType;
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const { page, limit, skip } = getPagination(searchParams);
 
   const dateFilter =
     from && to
@@ -17,76 +38,169 @@ export async function GET(req: NextRequest) {
       : undefined;
 
   if (type === "order-aging") {
-    const orders = await db.order.findMany({
-      where: {
-        status: { notIn: ["COMPLETED", "CANCELLED"] },
-        ...(dateFilter ? { orderDate: dateFilter } : {}),
+    const where: Prisma.OrderWhereInput = {
+      status: { notIn: ["COMPLETED", "CANCELLED"] },
+      ...(dateFilter ? { orderDate: dateFilter } : {}),
+    };
+
+    const [orders, total] = await Promise.all([
+      db.order.findMany({
+        where,
+        include: { customer: { select: { partyName: true } } },
+        orderBy: { orderDate: "asc" },
+        skip,
+        take: limit,
+      }),
+      db.order.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      orders,
+      meta: {
+        total,
+        page,
+        limit,
+        activeOrders: total,
       },
-      include: { customer: { select: { partyName: true } } },
-      orderBy: { orderDate: "asc" },
     });
-    return NextResponse.json({ orders });
   }
 
   if (type === "vendor-pending") {
-    const requests = await db.vendorRequest.findMany({
-      where: {
-        status: { notIn: ["FULLY_RECEIVED", "CANCELLED"] },
-        ...(dateFilter ? { requestDate: dateFilter } : {}),
+    const where: Prisma.VendorRequestWhereInput = {
+      status: { notIn: ["FULLY_RECEIVED", "CANCELLED"] },
+      ...(dateFilter ? { requestDate: dateFilter } : {}),
+    };
+
+    const [requests, total, overdue] = await Promise.all([
+      db.vendorRequest.findMany({
+        where,
+        include: {
+          vendor: { select: { name: true } },
+          vendorRequestItems: true,
+        },
+        orderBy: { expectedArrivalDate: "asc" },
+        skip,
+        take: limit,
+      }),
+      db.vendorRequest.count({ where }),
+      db.vendorRequest.count({
+        where: {
+          ...where,
+          expectedArrivalDate: { lt: new Date() },
+        },
+      }),
+    ]);
+
+    return NextResponse.json({
+      requests,
+      meta: {
+        total,
+        page,
+        limit,
+        overdue,
       },
-      include: {
-        vendor: { select: { name: true } },
-        vendorRequestItems: true,
-      },
-      orderBy: { expectedArrivalDate: "asc" },
     });
-    return NextResponse.json({ requests });
   }
 
   if (type === "delayed-orders") {
     const today = new Date();
-    const orders = await db.order.findMany({
-      where: {
-        promisedDeliveryDate: { lt: today },
-        status: { notIn: ["COMPLETED", "CANCELLED", "DISPATCHED"] },
+    const where: Prisma.OrderWhereInput = {
+      promisedDeliveryDate: { lt: today },
+      status: { notIn: ["COMPLETED", "CANCELLED", "DISPATCHED"] },
+    };
+
+    const [orders, total] = await Promise.all([
+      db.order.findMany({
+        where,
+        include: { customer: { select: { partyName: true } } },
+        orderBy: { promisedDeliveryDate: "asc" },
+        skip,
+        take: limit,
+      }),
+      db.order.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      orders,
+      meta: {
+        total,
+        page,
+        limit,
+        overdue: total,
       },
-      include: { customer: { select: { partyName: true } } },
-      orderBy: { promisedDeliveryDate: "asc" },
     });
-    return NextResponse.json({ orders });
   }
 
   if (type === "raw-material-pending") {
-    const items = await db.orderItem.findMany({
-      where: {
-        rawMaterialRequired: true,
-        productionStage: "WAITING_MATERIAL",
-      },
-      include: {
-        product: { select: { name: true, sku: true } },
-        order: {
-          include: { customer: { select: { partyName: true } } },
+    const where: Prisma.OrderItemWhereInput = {
+      rawMaterialRequired: true,
+      productionStage: ProductionStage.WAITING_MATERIAL,
+    };
+
+    const [items, total, withoutRequest] = await Promise.all([
+      db.orderItem.findMany({
+        where,
+        include: {
+          product: { select: { name: true, sku: true } },
+          order: {
+            include: { customer: { select: { partyName: true } } },
+          },
+          vendorRequestItems: {
+            include: { vendorRequest: { include: { vendor: { select: { name: true } } } } },
+          },
         },
-        vendorRequestItems: {
-          include: { vendorRequest: { include: { vendor: { select: { name: true } } } } },
+        orderBy: { createdAt: "asc" },
+        skip,
+        take: limit,
+      }),
+      db.orderItem.count({ where }),
+      db.orderItem.count({
+        where: {
+          ...where,
+          vendorRequestItems: { none: {} },
         },
+      }),
+    ]);
+
+    return NextResponse.json({
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        withoutRequest,
       },
-      orderBy: { createdAt: "asc" },
     });
-    return NextResponse.json({ items });
   }
 
   if (type === "dispatch-summary") {
-    const dispatches = await db.dispatch.findMany({
-      where: dateFilter ? { dispatchDate: dateFilter } : {},
-      include: {
-        order: { include: { customer: { select: { partyName: true } } } },
-        dispatchItems: { include: { orderItem: { include: { product: true } } } },
-        createdBy: { select: { name: true } },
+    const where: Prisma.DispatchWhereInput = dateFilter ? { dispatchDate: dateFilter } : {};
+
+    const [dispatches, total, partial] = await Promise.all([
+      db.dispatch.findMany({
+        where,
+        include: {
+          order: { include: { customer: { select: { partyName: true } } } },
+          dispatchItems: { include: { orderItem: { include: { product: true } } } },
+          createdBy: { select: { name: true } },
+        },
+        orderBy: { dispatchDate: "desc" },
+        skip,
+        take: limit,
+      }),
+      db.dispatch.count({ where }),
+      db.dispatch.count({ where: { ...where, isPartial: true } }),
+    ]);
+
+    return NextResponse.json({
+      dispatches,
+      meta: {
+        total,
+        page,
+        limit,
+        partial,
       },
-      orderBy: { dispatchDate: "desc" },
     });
-    return NextResponse.json({ dispatches });
   }
 
   if (type === "customer-history") {
@@ -94,15 +208,31 @@ export async function GET(req: NextRequest) {
     if (!customerId) {
       return NextResponse.json({ error: "customerId required" }, { status: 400 });
     }
-    const orders = await db.order.findMany({
-      where: { customerId },
-      include: {
-        orderItems: { include: { product: { select: { name: true } } } },
-        dispatches: true,
+
+    const where: Prisma.OrderWhereInput = { customerId };
+
+    const [orders, total] = await Promise.all([
+      db.order.findMany({
+        where,
+        include: {
+          orderItems: { include: { product: { select: { name: true } } } },
+          dispatches: true,
+        },
+        orderBy: { orderDate: "desc" },
+        skip,
+        take: limit,
+      }),
+      db.order.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      orders,
+      meta: {
+        total,
+        page,
+        limit,
       },
-      orderBy: { orderDate: "desc" },
     });
-    return NextResponse.json({ orders });
   }
 
   return NextResponse.json({ error: "Unknown report type" }, { status: 400 });
