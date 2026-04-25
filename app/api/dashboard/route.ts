@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
+import { Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { getDashboardSectionsForRole } from "@/lib/rbac";
+import { getDashboardCache, setDashboardCache } from "@/lib/server-cache";
 
 export async function GET() {
   const session = await getAuthSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const sections = new Set(getDashboardSectionsForRole(session.user.role));
+  const role = session.user.role as Role;
+  const cached = await getDashboardCache<Record<string, unknown>>(role);
+  if (cached) {
+    return NextResponse.json(cached, {
+      headers: {
+        "x-cache": "redis-hit",
+      },
+    });
+  }
+
+  const sections = new Set(getDashboardSectionsForRole(role));
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -144,5 +156,11 @@ export async function GET() {
     };
   }
 
-  return NextResponse.json(response);
+  await setDashboardCache(role, response);
+
+  return NextResponse.json(response, {
+    headers: {
+      "x-cache": "redis-miss",
+    },
+  });
 }

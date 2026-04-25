@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { VendorRequestStatus } from "@prisma/client";
+import { invalidateDashboardCache } from "@/lib/server-cache";
 
 const updateSchema = z.object({
   expectedArrivalDate: z.string().optional(),
@@ -60,5 +61,6 @@ export async function PATCH(
   }
 
   const vr = await db.vendorRequest.update({ where: { id }, data });
+  await invalidateDashboardCache();
   return NextResponse.json(vr);
 }

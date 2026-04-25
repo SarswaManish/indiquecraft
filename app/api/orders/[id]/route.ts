@@ -11,6 +11,7 @@ import {
   ProductionStage,
 } from "@prisma/client";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
+import { invalidateDashboardCache } from "@/lib/server-cache";
 
 const updateSchema = z.object({
   customerId: z.string().min(1).optional(),
@@ -287,6 +288,8 @@ export async function PATCH(
         },
       },
     });
+
+    await invalidateDashboardCache();
 
     return NextResponse.json(order);
   } catch (error) {

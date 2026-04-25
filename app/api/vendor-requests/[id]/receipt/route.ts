@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { recomputeAndPersistOrderStatuses } from "@/lib/order-workflow";
+import { invalidateDashboardCache } from "@/lib/server-cache";
 
 function createHttpError(message: string, status = 400) {
   return Object.assign(new Error(message), { status });
@@ -128,6 +129,8 @@ export async function POST(
 
       return receipt;
     });
+
+    await invalidateDashboardCache();
 
     return NextResponse.json(receipt, { status: 201 });
   } catch (error) {

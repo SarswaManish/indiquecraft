@@ -4,6 +4,7 @@ import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { invalidateDashboardCache } from "@/lib/server-cache";
 
 function createHttpError(message: string, status = 400) {
   return Object.assign(new Error(message), { status });
@@ -113,6 +114,8 @@ export async function POST(req: NextRequest) {
         include: { dispatchItems: true },
       });
     });
+
+    await invalidateDashboardCache();
 
     return NextResponse.json(dispatch, { status: 201 });
   } catch (error) {

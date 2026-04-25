@@ -5,6 +5,7 @@ import { z } from "zod";
 import { OrderStatus, Prisma, ProductionStage } from "@prisma/client";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
+import { invalidateDashboardCache } from "@/lib/server-cache";
 
 const stageUpdateSchema = z.object({
   orderItemId: z.string().min(1),
@@ -50,6 +51,8 @@ export async function POST(req: NextRequest) {
     await recomputeAndPersistOrderStatus(tx, orderItem.orderId);
     return log;
   });
+
+  await invalidateDashboardCache();
 
   return NextResponse.json(log, { status: 201 });
 }
