@@ -23,6 +23,7 @@ import {
 } from "@/lib/constants";
 import { ArrowLeft, AlertTriangle, Plus, Truck } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/lib/toast-context";
 import { OrderStatus, ProductionStage, FinishType } from "@prisma/client";
 
 interface OrderDetail {
@@ -106,6 +107,7 @@ export default function OrderDetailPage() {
   const [dispatchSaving, setDispatchSaving] = useState(false);
   const [dispatchError, setDispatchError] = useState("");
   const [stageError, setStageError] = useState("");
+  const { showToast } = useToast();
 
   // Status update
   const [newStatus, setNewStatus] = useState<OrderStatus>("NEW");
@@ -153,6 +155,10 @@ export default function OrderDetailPage() {
     }
     setStageSaving(false);
     setStageModal(null);
+    showToast({
+      title: "Production stage updated",
+      description: "The order item has been moved to the next tracked stage.",
+    });
     void fetchOrder();
   }
 
@@ -190,18 +196,36 @@ export default function OrderDetailPage() {
       remarks: "",
       selectedItems: {},
     });
+    showToast({
+      title: "Dispatch recorded",
+      description: `${items.length} line item(s) were added to dispatch.`,
+    });
     void fetchOrder();
   }
 
   async function handleStatusUpdate() {
     setStatusSaving(true);
-    await fetch(`/api/orders/${id}`, {
+    const response = await fetch(`/api/orders/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
     });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      showToast({
+        tone: "error",
+        title: "Order status update failed",
+        description: error.error || "Please try again.",
+      });
+      setStatusSaving(false);
+      return;
+    }
     setStatusSaving(false);
     setStatusModal(false);
+    showToast({
+      title: "Order status updated",
+      description: `Order is now marked as ${ORDER_STATUS_LABELS[newStatus]}.`,
+    });
     fetchOrder();
   }
 

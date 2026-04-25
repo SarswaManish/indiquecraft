@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Pencil, Plus, Phone, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useToast } from "@/lib/toast-context";
 
 interface Customer {
   id: string;
@@ -40,6 +41,7 @@ export default function CustomersPage() {
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
+  const { showToast } = useToast();
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -87,23 +89,49 @@ export default function CustomersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch(editingCustomerId ? `/api/customers/${editingCustomerId}` : "/api/customers", {
+    const response = await fetch(editingCustomerId ? `/api/customers/${editingCustomerId}` : "/api/customers", {
       method: editingCustomerId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      showToast({
+        tone: "error",
+        title: editingCustomerId ? "Customer update failed" : "Customer creation failed",
+        description: error.error || "Please review the customer details and try again.",
+      });
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
     setEditingCustomerId(null);
+    showToast({
+      title: editingCustomerId ? "Customer updated" : "Customer created",
+      description: form.partyName,
+    });
     await refreshCustomers();
   }
 
   async function handleArchive(customer: Customer) {
-    await fetch(`/api/customers/${customer.id}`, {
+    const response = await fetch(`/api/customers/${customer.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !customer.isActive }),
+    });
+    if (!response.ok) {
+      showToast({
+        tone: "error",
+        title: "Customer status update failed",
+        description: `Could not ${customer.isActive ? "archive" : "restore"} ${customer.partyName}.`,
+      });
+      return;
+    }
+    showToast({
+      title: customer.isActive ? "Customer archived" : "Customer restored",
+      description: customer.partyName,
     });
     await refreshCustomers();
   }
@@ -119,6 +147,10 @@ export default function CustomersPage() {
       )
     );
     setSelectedCustomerIds([]);
+    showToast({
+      title: nextActiveState ? "Customers restored" : "Customers archived",
+      description: `${selectedCustomerIds.length} records updated.`,
+    });
     await refreshCustomers();
   }
 

@@ -15,6 +15,7 @@ import { formatDate, formatDateTime, delayedDays } from "@/lib/utils";
 import { VENDOR_STATUS_LABELS } from "@/lib/constants";
 import { ArrowLeft, Phone, AlertTriangle, PackageCheck } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/lib/toast-context";
 import { VendorRequestStatus } from "@prisma/client";
 
 interface VRDetail {
@@ -68,6 +69,7 @@ export default function VendorRequestDetailPage() {
   const [statusSaving, setStatusSaving] = useState(false);
   const [receiptError, setReceiptError] = useState("");
   const [statusError, setStatusError] = useState("");
+  const { showToast } = useToast();
 
   async function fetchVR() {
     const res = await fetch(`/api/vendor-requests/${id}`);
@@ -120,6 +122,10 @@ export default function VendorRequestDetailPage() {
     }
     setReceiptSaving(false);
     setReceiptModal(false);
+    showToast({
+      title: "Receipt recorded",
+      description: `${items.length} material line(s) were updated.`,
+    });
     void fetchVR();
   }
 
@@ -139,6 +145,10 @@ export default function VendorRequestDetailPage() {
     }
     setStatusSaving(false);
     setStatusModal(false);
+    showToast({
+      title: "Vendor request status updated",
+      description: VENDOR_STATUS_LABELS[newStatus],
+    });
     void fetchVR();
   }
 

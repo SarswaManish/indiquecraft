@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Pencil, Plus, Phone, RotateCcw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useToast } from "@/lib/toast-context";
 
 interface Vendor {
   id: string;
@@ -45,6 +46,7 @@ export default function VendorsPage() {
   const [saving, setSaving] = useState(false);
   const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
   const debouncedSearch = useDebounce(search, 300);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let active = true;
@@ -90,23 +92,49 @@ export default function VendorsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch(editingVendorId ? `/api/vendors/${editingVendorId}` : "/api/vendors", {
+    const response = await fetch(editingVendorId ? `/api/vendors/${editingVendorId}` : "/api/vendors", {
       method: editingVendorId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      showToast({
+        tone: "error",
+        title: editingVendorId ? "Vendor update failed" : "Vendor creation failed",
+        description: error.error || "Please review the vendor details and try again.",
+      });
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
     setEditingVendorId(null);
+    showToast({
+      title: editingVendorId ? "Vendor updated" : "Vendor created",
+      description: form.name,
+    });
     await refreshVendors();
   }
 
   async function handleArchive(vendor: Vendor) {
-    await fetch(`/api/vendors/${vendor.id}`, {
+    const response = await fetch(`/api/vendors/${vendor.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !vendor.isActive }),
+    });
+    if (!response.ok) {
+      showToast({
+        tone: "error",
+        title: "Vendor status update failed",
+        description: `Could not ${vendor.isActive ? "archive" : "restore"} ${vendor.name}.`,
+      });
+      return;
+    }
+    showToast({
+      title: vendor.isActive ? "Vendor archived" : "Vendor restored",
+      description: vendor.name,
     });
     await refreshVendors();
   }
@@ -122,6 +150,10 @@ export default function VendorsPage() {
       )
     );
     setSelectedVendorIds([]);
+    showToast({
+      title: nextActiveState ? "Vendors restored" : "Vendors archived",
+      description: `${selectedVendorIds.length} records updated.`,
+    });
     await refreshVendors();
   }
 

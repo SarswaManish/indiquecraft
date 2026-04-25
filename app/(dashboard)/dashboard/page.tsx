@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
   ShoppingCart,
@@ -15,6 +15,7 @@ import {
   FilePlus2,
   Users,
   Boxes,
+  RefreshCw,
 } from "lucide-react";
 import { StatCard } from "@/components/shared/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,12 +68,34 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const refreshDashboard = useCallback(async () => {
+    setRefreshing(true);
+    const response = await fetch("/api/dashboard", { cache: "no-store" });
+    const result = await response.json();
+    setData(result);
+    setLastUpdated(new Date());
+    setRefreshing(false);
+  }, []);
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
+    let active = true;
+
+    async function loadDashboard() {
+      const response = await fetch("/api/dashboard", { cache: "no-store" });
+      const result = await response.json();
+      if (!active) return;
+      setData(result);
+      setLastUpdated(new Date());
+      setLoading(false);
+    }
+
+    void loadDashboard();
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (loading) {
@@ -193,6 +216,19 @@ export default function DashboardPage() {
                   No urgent blockers right now
                 </div>
               )}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-300">
+              <button
+                type="button"
+                onClick={() => void refreshDashboard()}
+                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 font-medium transition hover:bg-white/15"
+              >
+                <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing..." : "Refresh data"}
+              </button>
+              <span>
+                Last updated {lastUpdated ? lastUpdated.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }) : "just now"}
+              </span>
             </div>
           </div>
 

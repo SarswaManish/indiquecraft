@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { FINISH_TYPE_LABELS } from "@/lib/constants";
+import { useToast } from "@/lib/toast-context";
 import { FinishType } from "@prisma/client";
 
 interface Product {
@@ -47,6 +48,7 @@ export default function ProductsPage() {
   const [saving, setSaving] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const debouncedSearch = useDebounce(search, 300);
+  const { showToast } = useToast();
 
   useEffect(() => {
     let active = true;
@@ -92,23 +94,49 @@ export default function ProductsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await fetch(editingProductId ? `/api/products/${editingProductId}` : "/api/products", {
+    const response = await fetch(editingProductId ? `/api/products/${editingProductId}` : "/api/products", {
       method: editingProductId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      showToast({
+        tone: "error",
+        title: editingProductId ? "Product update failed" : "Product creation failed",
+        description: error.error || "Please review the form and try again.",
+      });
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     setModalOpen(false);
     setForm(emptyForm);
     setEditingProductId(null);
+    showToast({
+      title: editingProductId ? "Product updated" : "Product created",
+      description: `${form.name} is ready for use in orders and vendor requests.`,
+    });
     await refreshProducts();
   }
 
   async function handleArchive(product: Product) {
-    await fetch(`/api/products/${product.id}`, {
+    const response = await fetch(`/api/products/${product.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !product.isActive }),
+    });
+    if (!response.ok) {
+      showToast({
+        tone: "error",
+        title: "Product status update failed",
+        description: `Could not ${product.isActive ? "archive" : "restore"} ${product.name}.`,
+      });
+      return;
+    }
+    showToast({
+      title: product.isActive ? "Product archived" : "Product restored",
+      description: product.name,
     });
     await refreshProducts();
   }
@@ -124,6 +152,10 @@ export default function ProductsPage() {
       )
     );
     setSelectedProductIds([]);
+    showToast({
+      title: nextActiveState ? "Products restored" : "Products archived",
+      description: `${selectedProductIds.length} records updated.`,
+    });
     await refreshProducts();
   }
 
