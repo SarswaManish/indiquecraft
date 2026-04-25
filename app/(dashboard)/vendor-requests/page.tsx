@@ -137,6 +137,37 @@ export default function VendorRequestsPage() {
           loading={loading}
           emptyMessage="No vendor requests found"
           onRowClick={(row) => router.push(`/vendor-requests/${(row as VendorRequest).id}`)}
+          renderCard={(row) => {
+            const days = row.expectedArrivalDate ? delayedDays(row.expectedArrivalDate) : 0;
+            return (
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-sm font-semibold text-indigo-700">{row.requestNumber}</p>
+                    <p className="mt-1 font-medium text-slate-900">{row.vendor.name}</p>
+                    <p className="text-xs text-slate-400">{row.vendor.phone}</p>
+                  </div>
+                  <VendorStatusBadge status={row.status} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Requested</p>
+                    <p className="mt-1 text-slate-700">{formatDate(row.requestDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Expected</p>
+                    <p className="mt-1 text-slate-700">{formatDate(row.expectedArrivalDate)}</p>
+                    {days > 0 && row.status !== "FULLY_RECEIVED" && (
+                      <p className="text-xs font-medium text-red-600">{days}d late</p>
+                    )}
+                  </div>
+                </div>
+                <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                  {row._count.vendorRequestItems} items
+                </span>
+              </div>
+            );
+          }}
         />
         <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>

@@ -166,6 +166,38 @@ export default function OrdersPage() {
           loading={loading}
           emptyMessage="No orders found"
           onRowClick={(row) => router.push(`/orders/${(row as Order).id}`)}
+          renderCard={(row) => {
+            const days = row.promisedDeliveryDate ? delayedDays(row.promisedDeliveryDate) : 0;
+            return (
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-sm font-semibold text-indigo-700">{row.orderNumber}</p>
+                    <p className="mt-1 font-medium text-slate-900">{row.customer.partyName}</p>
+                    <p className="text-xs text-slate-400">{row.customer.phone}</p>
+                  </div>
+                  <OrderStatusBadge status={row.status} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Order date</p>
+                    <p className="mt-1 text-slate-700">{formatDate(row.orderDate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Due</p>
+                    <p className="mt-1 text-slate-700">{formatDate(row.promisedDeliveryDate)}</p>
+                    {days > 0 && <p className="text-xs font-medium text-red-600">{days}d overdue</p>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <PriorityBadge priority={row.priority} />
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                    {row._count.orderItems} items
+                  </span>
+                </div>
+              </div>
+            );
+          }}
         />
         <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>

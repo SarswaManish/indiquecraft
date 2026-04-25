@@ -31,27 +31,32 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
         onClick={onClose}
       />
       <div
         className={cn(
-          "relative bg-white rounded-lg shadow-xl w-full mx-4 max-h-[90vh] flex flex-col",
+          "relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[1.75rem] border border-white/60 bg-white/95 shadow-[0_30px_80px_rgba(15,23,42,0.18)]",
           sizes[size]
         )}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo-500">
+              Workspace editor
+            </p>
+            <h2 className="mt-1 text-lg font-semibold text-slate-900">{title}</h2>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
             <X size={20} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">{children}</div>
       </div>
     </div>
   );

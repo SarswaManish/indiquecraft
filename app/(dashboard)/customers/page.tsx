@@ -265,6 +265,35 @@ export default function CustomersPage() {
           loading={loading}
           emptyMessage="No customers found"
           onRowClick={(row) => router.push(`/customers/${(row as Customer).id}`)}
+          renderCard={(row) => (
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">{row.partyName}</p>
+                  <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">
+                    <Phone size={13} />
+                    {row.phone}
+                  </p>
+                </div>
+                {row.isActive
+                  ? <Badge className="bg-emerald-100 text-emerald-700">Active</Badge>
+                  : <Badge className="bg-gray-100 text-gray-500">Archived</Badge>}
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">City</p>
+                  <p className="mt-1 text-slate-700">{row.city || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">GST</p>
+                  <p className="mt-1 text-slate-700">{row.gstNumber || "—"}</p>
+                </div>
+              </div>
+              <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                {row._count.orders} orders
+              </span>
+            </div>
+          )}
         />
         <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>

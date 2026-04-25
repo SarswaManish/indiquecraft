@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { Pagination } from "@/components/shared/pagination";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ProductionStageBadge, OrderStatusBadge } from "@/components/shared/status-badge";
@@ -10,7 +11,7 @@ import { PRIORITY_COLORS, PRIORITY_LABELS, PRODUCTION_STAGE_LABELS } from "@/lib
 import { cn, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { OrderPriority, ProductionStage } from "@prisma/client";
-import { Search } from "lucide-react";
+import { Search, ArrowRight } from "lucide-react";
 
 interface ProductionItem {
   id: string;
@@ -36,16 +37,24 @@ const stageFilterOptions = [
 
 export default function ProductionPage() {
   const [items, setItems] = useState<ProductionItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
   const [stageFilter, setStageFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const PAGE_SIZE = 16;
 
   useEffect(() => {
     let active = true;
 
     async function loadItems() {
       setLoading(true);
-      const params = new URLSearchParams({ view: "queue" });
+      const params = new URLSearchParams({
+        view: "queue",
+        page: String(page),
+        limit: String(PAGE_SIZE),
+      });
       if (stageFilter) {
         params.set("stage", stageFilter);
       }
@@ -54,6 +63,17 @@ export default function ProductionPage() {
 
       if (!active) return;
       setItems(data.items || []);
+      setTotal(data.total || 0);
+      setStageCounts(
+        Object.fromEntries(
+          (data.stageCounts || []).map(
+            (entry: { productionStage: string; _count: { productionStage: number } }) => [
+              entry.productionStage,
+              entry._count.productionStage,
+            ]
+          )
+        )
+      );
       setLoading(false);
     }
 
@@ -61,7 +81,7 @@ export default function ProductionPage() {
     return () => {
       active = false;
     };
-  }, [stageFilter]);
+  }, [stageFilter, page]);
 
   const filteredItems = items.filter((item) => {
     const term = search.trim().toLowerCase();
@@ -115,11 +135,6 @@ export default function ProductionPage() {
   ];
 
   // Group by stage
-  const stageCounts = items.reduce((acc, item) => {
-    acc[item.productionStage] = (acc[item.productionStage] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -128,11 +143,14 @@ export default function ProductionPage() {
       />
 
       {/* Stage summary */}
-      <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
         {Object.entries(PRODUCTION_STAGE_LABELS).map(([key, label]) => (
           <button
             key={key}
-            onClick={() => setStageFilter(stageFilter === key ? "" : key)}
+            onClick={() => {
+              setStageFilter(stageFilter === key ? "" : key);
+              setPage(1);
+            }}
             className={`p-3 rounded-lg border text-center transition-colors ${
               stageFilter === key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 bg-white hover:bg-gray-50"
             }`}
@@ -157,17 +175,81 @@ export default function ProductionPage() {
           <Select
             options={stageFilterOptions}
             value={stageFilter}
-            onChange={(e) => setStageFilter(e.target.value)}
+            onChange={(e) => {
+              setStageFilter(e.target.value);
+              setPage(1);
+            }}
             className="w-52"
           />
-          <span className="text-sm text-gray-500">{filteredItems.length} items</span>
+          <span className="text-sm text-gray-500">
+            {filteredItems.length} visible on this page • {total} total items
+          </span>
         </div>
         <DataTable
           columns={columns}
           data={filteredItems}
           loading={loading}
           emptyMessage="No items in production"
+          renderCard={(row) => {
+            const pending = row.vendorRequestItems.reduce(
+              (sum, requestItem) => sum + requestItem.pendingQty,
+              0
+            );
+
+            return (
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">{row.product.name}</p>
+                    <p className="text-xs font-mono text-slate-400">{row.product.sku}</p>
+                  </div>
+                  <ProductionStageBadge stage={row.productionStage} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Order</p>
+                    <Link href={`/orders/${row.order.id}`} className="mt-1 inline-flex items-center gap-1 font-medium text-indigo-600">
+                      {row.order.orderNumber}
+                      <ArrowRight size={13} />
+                    </Link>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Customer</p>
+                    <p className="mt-1 font-medium text-slate-700">{row.order.customer.partyName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Quantity</p>
+                    <p className="mt-1 text-slate-700">
+                      {row.quantity}
+                      {row.size ? ` / ${row.size}` : ""}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Material</p>
+                    <p className={cn("mt-1 font-medium", pending > 0 ? "text-amber-700" : "text-emerald-700")}>
+                      {pending > 0 ? `Pending ${pending}` : "Ready"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={cn(
+                      "inline-flex rounded-full px-2 py-1 text-xs font-medium",
+                      PRIORITY_COLORS[row.order.priority]
+                    )}
+                  >
+                    {PRIORITY_LABELS[row.order.priority]}
+                  </span>
+                  <OrderStatusBadge status={row.order.status as never} />
+                  <span className="text-xs text-slate-400">
+                    Due {formatDate(row.order.promisedDeliveryDate)}
+                  </span>
+                </div>
+              </div>
+            );
+          }}
         />
+        <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthSession } from "@/lib/auth";
 import { z } from "zod";
-import { ProductionStage } from "@prisma/client";
+import { OrderStatus, Prisma, ProductionStage } from "@prisma/client";
 import { recomputeAndPersistOrderStatus } from "@/lib/order-workflow";
 
 const stageUpdateSchema = z.object({
@@ -62,46 +62,66 @@ export async function GET(req: NextRequest) {
   const orderId = searchParams.get("orderId");
   const orderItemId = searchParams.get("orderItemId");
   const stage = searchParams.get("stage");
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "20");
+  const activeOrderStatuses: OrderStatus[] = [
+    "RAW_MATERIAL_PENDING",
+    "MATERIAL_RECEIVED",
+    "IN_PRODUCTION",
+    "FINISHING",
+    "PACKING",
+    "READY_TO_DISPATCH",
+  ];
 
   if (view === "queue") {
-    const items = await db.orderItem.findMany({
-      where: {
-        order: {
-          status: {
-            in: [
-              "RAW_MATERIAL_PENDING",
-              "MATERIAL_RECEIVED",
-              "IN_PRODUCTION",
-              "FINISHING",
-              "PACKING",
-              "READY_TO_DISPATCH",
-            ],
-          },
-        },
-        ...(stage ? { productionStage: stage as ProductionStage } : {}),
-      },
-      orderBy: [
-        { order: { promisedDeliveryDate: "asc" } },
-        { updatedAt: "desc" },
-      ],
-      include: {
-        product: { select: { name: true, sku: true } },
-        vendorRequestItems: { select: { pendingQty: true } },
-        order: {
-          select: {
-            id: true,
-            orderNumber: true,
-            status: true,
-            priority: true,
-            promisedDeliveryDate: true,
-            customer: { select: { partyName: true } },
-          },
+    const where: Prisma.OrderItemWhereInput = {
+      order: {
+        status: {
+          in: activeOrderStatuses,
         },
       },
-      take: 200,
-    });
+      ...(stage ? { productionStage: stage as ProductionStage } : {}),
+    };
 
-    return NextResponse.json({ items });
+    const [items, total, stageCounts] = await Promise.all([
+      db.orderItem.findMany({
+        where,
+        orderBy: [
+          { order: { promisedDeliveryDate: "asc" } },
+          { updatedAt: "desc" },
+        ],
+        include: {
+          product: { select: { name: true, sku: true } },
+          vendorRequestItems: { select: { pendingQty: true } },
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+              status: true,
+              priority: true,
+              promisedDeliveryDate: true,
+              customer: { select: { partyName: true } },
+            },
+          },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.orderItem.count({ where }),
+      db.orderItem.groupBy({
+        by: ["productionStage"],
+        where: {
+          order: {
+            status: {
+              in: activeOrderStatuses,
+            },
+          },
+        },
+        _count: { productionStage: true },
+      }),
+    ]);
+
+    return NextResponse.json({ items, total, page, limit, stageCounts });
   }
 
   const where: Record<string, unknown> = {};
