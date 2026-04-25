@@ -254,7 +254,17 @@ export async function PATCH(
         }
       }
 
-      await recomputeAndPersistOrderStatus(tx, id);
+      if (parsed.data.status === undefined) {
+        await recomputeAndPersistOrderStatus(tx, id);
+      } else if (parsed.data.items) {
+        // Keep workflow-derived side effects from item edits, but let an explicit
+        // manual status choice win as the final persisted value.
+        await recomputeAndPersistOrderStatus(tx, id);
+        await tx.order.update({
+          where: { id },
+          data: { status: parsed.data.status },
+        });
+      }
     }, {
       timeout: 15000,
       maxWait: 10000,
