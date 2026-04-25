@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { Pagination } from "@/components/shared/pagination";
 import { SearchInput } from "@/components/shared/search-input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -28,14 +29,17 @@ const emptyForm = {
   name: "", phone: "", whatsappNumber: "", city: "",
   materialSupplied: "", standardLeadDays: 7, notes: "",
 };
+const PAGE_SIZE = 15;
 
 export default function VendorsPage() {
   const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState(emptyForm);
   const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,12 +53,15 @@ export default function VendorsPage() {
       setLoading(true);
       const params = new URLSearchParams({
         search: debouncedSearch,
+        page: String(page),
+        limit: String(PAGE_SIZE),
         includeInactive: String(showInactive),
       });
       const res = await fetch(`/api/vendors?${params}`);
       const data = await res.json();
       if (!active) return;
       setVendors(data.vendors || []);
+      setTotal(data.total || 0);
       setSelectedVendorIds([]);
       setLoading(false);
     }
@@ -63,17 +70,20 @@ export default function VendorsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, showInactive]);
+  }, [debouncedSearch, showInactive, page]);
 
   async function refreshVendors() {
     setLoading(true);
     const params = new URLSearchParams({
       search: debouncedSearch,
+      page: String(page),
+      limit: String(PAGE_SIZE),
       includeInactive: String(showInactive),
     });
     const res = await fetch(`/api/vendors?${params}`);
     const data = await res.json();
     setVendors(data.vendors || []);
+    setTotal(data.total || 0);
     setLoading(false);
   }
 
@@ -192,7 +202,7 @@ export default function VendorsPage() {
   return (
     <div>
       <PageHeader
-        title={`Vendors (${vendors.length})`}
+        title={`Vendors (${total})`}
         description="Manage suppliers, clean up inactive records, and edit vendor profiles quickly."
         actions={
           <Button onClick={() => {
@@ -211,10 +221,20 @@ export default function VendorsPage() {
             <SearchInput
               placeholder="Search vendor name, city, material…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="max-w-sm"
             />
-            <Button variant={showInactive ? "secondary" : "outline"} size="sm" onClick={() => setShowInactive((value) => !value)}>
+            <Button
+              variant={showInactive ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowInactive((value) => !value);
+                setPage(1);
+              }}
+            >
               {showInactive ? "Hide Archived" : "Show Archived"}
             </Button>
           </div>
@@ -249,6 +269,7 @@ export default function VendorsPage() {
           emptyMessage="No vendors found"
           onRowClick={(row) => router.push(`/vendors/${(row as Vendor).id}`)}
         />
+        <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingVendorId ? "Edit Vendor" : "Add New Vendor"} size="lg">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { Pagination } from "@/components/shared/pagination";
 import { SearchInput } from "@/components/shared/search-input";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -30,6 +31,8 @@ const statusOptions = [
   ...Object.entries(VENDOR_STATUS_LABELS).map(([v, l]) => ({ value: v, label: l })),
 ];
 
+const PAGE_SIZE = 15;
+
 export default function VendorRequestsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,6 +40,7 @@ export default function VendorRequestsPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(searchParams.get("status") || "");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const debouncedSearch = useDebounce(search, 300);
 
@@ -45,7 +49,12 @@ export default function VendorRequestsPage() {
 
     async function loadRequests() {
       setLoading(true);
-      const params = new URLSearchParams({ search: debouncedSearch, status, limit: "50" });
+      const params = new URLSearchParams({
+        search: debouncedSearch,
+        status,
+        page: String(page),
+        limit: String(PAGE_SIZE),
+      });
       const res = await fetch(`/api/vendor-requests?${params}`);
       const data = await res.json();
       if (!active) return;
@@ -58,7 +67,7 @@ export default function VendorRequestsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, status]);
+  }, [debouncedSearch, status, page]);
 
   const columns = [
     { key: "requestNumber", header: "Request #", render: (row: VendorRequest) => (
@@ -106,13 +115,19 @@ export default function VendorRequestsPage() {
           <SearchInput
             placeholder="Search request #, vendor…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="w-64"
           />
           <Select
             options={statusOptions}
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
             className="w-52"
           />
         </div>
@@ -123,6 +138,7 @@ export default function VendorRequestsPage() {
           emptyMessage="No vendor requests found"
           onRowClick={(row) => router.push(`/vendor-requests/${(row as VendorRequest).id}`)}
         />
+        <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>
     </div>
   );

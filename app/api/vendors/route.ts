@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "20");
   const includeInactive = searchParams.get("includeInactive") === "true";
 
   const where = search
@@ -34,15 +36,20 @@ export async function GET(req: NextRequest) {
     ? {}
     : { isActive: true };
 
-  const vendors = await db.vendor.findMany({
-    where,
-    orderBy: { name: "asc" },
-    include: {
-      _count: { select: { vendorRequests: true } },
-    },
-  });
+  const [vendors, total] = await Promise.all([
+    db.vendor.findMany({
+      where,
+      orderBy: { name: "asc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        _count: { select: { vendorRequests: true } },
+      },
+    }),
+    db.vendor.count({ where }),
+  ]);
 
-  return NextResponse.json({ vendors });
+  return NextResponse.json({ vendors, total, page, limit });
 }
 
 export async function POST(req: NextRequest) {

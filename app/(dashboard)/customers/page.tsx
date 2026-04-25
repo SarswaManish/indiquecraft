@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { Pagination } from "@/components/shared/pagination";
 import { SearchInput } from "@/components/shared/search-input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -24,6 +25,7 @@ interface Customer {
 }
 
 const emptyForm = { partyName: "", phone: "", city: "", address: "", gstNumber: "", notes: "" };
+const PAGE_SIZE = 15;
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -33,6 +35,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState(emptyForm);
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -47,6 +50,8 @@ export default function CustomersPage() {
       setLoading(true);
       const params = new URLSearchParams({
         search: debouncedSearch,
+        page: String(page),
+        limit: String(PAGE_SIZE),
         includeInactive: String(showInactive),
       });
       const res = await fetch(`/api/customers?${params}`);
@@ -62,12 +67,14 @@ export default function CustomersPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, showInactive]);
+  }, [debouncedSearch, showInactive, page]);
 
   async function refreshCustomers() {
     setLoading(true);
     const params = new URLSearchParams({
       search: debouncedSearch,
+      page: String(page),
+      limit: String(PAGE_SIZE),
       includeInactive: String(showInactive),
     });
     const res = await fetch(`/api/customers?${params}`);
@@ -211,10 +218,20 @@ export default function CustomersPage() {
             <SearchInput
               placeholder="Search by name, phone, city…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="max-w-sm"
             />
-            <Button variant={showInactive ? "secondary" : "outline"} size="sm" onClick={() => setShowInactive((value) => !value)}>
+            <Button
+              variant={showInactive ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowInactive((value) => !value);
+                setPage(1);
+              }}
+            >
               {showInactive ? "Hide Archived" : "Show Archived"}
             </Button>
           </div>
@@ -249,6 +266,7 @@ export default function CustomersPage() {
           emptyMessage="No customers found"
           onRowClick={(row) => router.push(`/customers/${(row as Customer).id}`)}
         />
+        <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingCustomerId ? "Edit Customer" : "Add New Customer"}>

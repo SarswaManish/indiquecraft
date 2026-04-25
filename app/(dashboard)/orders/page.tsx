@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { Pagination } from "@/components/shared/pagination";
 import { SearchInput } from "@/components/shared/search-input";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -36,6 +37,8 @@ const priorityOptions = [
   ...Object.entries(PRIORITY_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
+const PAGE_SIZE = 15;
+
 export default function OrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,6 +47,7 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(searchParams.get("status") || "");
   const [priority, setPriority] = useState("");
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const debouncedSearch = useDebounce(search, 300);
 
@@ -56,7 +60,8 @@ export default function OrdersPage() {
         search: debouncedSearch,
         status,
         priority,
-        limit: "50",
+        page: String(page),
+        limit: String(PAGE_SIZE),
       });
       const res = await fetch(`/api/orders?${params}`);
       const data = await res.json();
@@ -70,7 +75,7 @@ export default function OrdersPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, status, priority]);
+  }, [debouncedSearch, status, priority, page]);
 
   const columns = [
     {
@@ -130,19 +135,28 @@ export default function OrdersPage() {
           <SearchInput
             placeholder="Search order #, customer…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="w-64"
           />
           <Select
             options={statusOptions}
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
             className="w-48"
           />
           <Select
             options={priorityOptions}
             value={priority}
-            onChange={(e) => setPriority(e.target.value)}
+            onChange={(e) => {
+              setPriority(e.target.value);
+              setPage(1);
+            }}
             className="w-40"
           />
         </div>
@@ -153,6 +167,7 @@ export default function OrdersPage() {
           emptyMessage="No orders found"
           onRowClick={(row) => router.push(`/orders/${(row as Order).id}`)}
         />
+        <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { Pagination } from "@/components/shared/pagination";
 import { SearchInput } from "@/components/shared/search-input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -26,6 +27,7 @@ interface Product {
 }
 
 const finishOptions = Object.entries(FINISH_TYPE_LABELS).map(([value, label]) => ({ value, label }));
+const PAGE_SIZE = 15;
 
 const emptyForm = {
   sku: "", name: "", category: "", defaultSize: "", finishType: "PLAIN" as FinishType,
@@ -34,10 +36,12 @@ const emptyForm = {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState(emptyForm);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -51,12 +55,15 @@ export default function ProductsPage() {
       setLoading(true);
       const params = new URLSearchParams({
         search: debouncedSearch,
+        page: String(page),
+        limit: String(PAGE_SIZE),
         includeInactive: String(showInactive),
       });
       const res = await fetch(`/api/products?${params}`);
       const data = await res.json();
       if (!active) return;
       setProducts(data.products || []);
+      setTotal(data.total || 0);
       setSelectedProductIds([]);
       setLoading(false);
     }
@@ -65,17 +72,20 @@ export default function ProductsPage() {
     return () => {
       active = false;
     };
-  }, [debouncedSearch, showInactive]);
+  }, [debouncedSearch, showInactive, page]);
 
   async function refreshProducts() {
     setLoading(true);
     const params = new URLSearchParams({
       search: debouncedSearch,
+      page: String(page),
+      limit: String(PAGE_SIZE),
       includeInactive: String(showInactive),
     });
     const res = await fetch(`/api/products?${params}`);
     const data = await res.json();
     setProducts(data.products || []);
+    setTotal(data.total || 0);
     setLoading(false);
   }
 
@@ -198,7 +208,7 @@ export default function ProductsPage() {
   return (
     <div>
       <PageHeader
-        title={`Products (${products.length})`}
+        title={`Products (${total})`}
         description="Silver product catalogue with archive, restore, edit and bulk cleanup support."
         actions={
           <Button onClick={() => {
@@ -217,10 +227,20 @@ export default function ProductsPage() {
             <SearchInput
               placeholder="Search SKU, name, category…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="max-w-sm"
             />
-            <Button variant={showInactive ? "secondary" : "outline"} size="sm" onClick={() => setShowInactive((value) => !value)}>
+            <Button
+              variant={showInactive ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowInactive((value) => !value);
+                setPage(1);
+              }}
+            >
               {showInactive ? "Hide Archived" : "Show Archived"}
             </Button>
           </div>
@@ -256,6 +276,7 @@ export default function ProductsPage() {
           loading={loading}
           emptyMessage="No products found"
         />
+        <Pagination page={page} limit={PAGE_SIZE} total={total} onPageChange={setPage} />
       </div>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingProductId ? "Edit Product" : "Add New Product"} size="lg">
