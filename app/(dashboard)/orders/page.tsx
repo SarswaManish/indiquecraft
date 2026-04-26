@@ -12,7 +12,7 @@ import { OrderStatusBadge, PriorityBadge } from "@/components/shared/status-badg
 import { formatDate, delayedDays } from "@/lib/utils";
 import { ORDER_STATUS_LABELS, PRIORITY_LABELS } from "@/lib/constants";
 import { DEFAULT_PAGE_SIZE } from "@/lib/pagination";
-import { Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle, Pencil } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import Link from "next/link";
 import { OrderStatus, OrderPriority } from "@prisma/client";
@@ -195,6 +195,28 @@ export default function OrdersPage() {
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                     {row._count.orderItems} items
                   </span>
+                </div>
+                <div
+                  className="flex flex-wrap gap-2 pt-1"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/orders/${row.id}`)}
+                  >
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push(`/orders/${row.id}/edit`)}
+                  >
+                    <Pencil size={14} />
+                    Edit
+                  </Button>
                 </div>
               </div>
             );

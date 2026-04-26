@@ -325,6 +325,24 @@ export default function CustomersPage() {
               <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                 {row._count.orders} orders
               </span>
+              <div
+                className="flex flex-wrap gap-2 pt-1"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <Button type="button" variant="ghost" size="sm" onClick={() => void handleEdit(row)}>
+                  <Pencil size={14} />
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  variant={row.isActive ? "outline" : "secondary"}
+                  size="sm"
+                  onClick={() => void handleArchive(row)}
+                >
+                  {row.isActive ? <Trash2 size={14} /> : <RotateCcw size={14} />}
+                  {row.isActive ? "Archive" : "Restore"}
+                </Button>
+              </div>
             </div>
           )}
         />
