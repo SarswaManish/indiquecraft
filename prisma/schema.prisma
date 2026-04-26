@@ -92,6 +92,7 @@ model User {
   productionLogs ProductionLog[]
   dispatches     Dispatch[]
 
+  @@index([isActive])
   @@map("users")
 }
 
@@ -111,6 +112,8 @@ model Customer {
 
   orders Order[]
 
+  @@index([isActive, partyName])
+  @@index([createdAt])
   @@map("customers")
 }
 
@@ -132,6 +135,9 @@ model Product {
 
   orderItems OrderItem[]
 
+  @@index([isActive, name])
+  @@index([category, isActive])
+  @@index([createdAt])
   @@map("products")
 }
 
@@ -152,6 +158,8 @@ model Vendor {
 
   vendorRequests VendorRequest[]
 
+  @@index([isActive, name])
+  @@index([createdAt])
   @@map("vendors")
 }
 
@@ -174,6 +182,11 @@ model Order {
   orderItems OrderItem[]
   dispatches Dispatch[]
 
+  @@index([customerId, orderDate])
+  @@index([status, promisedDeliveryDate])
+  @@index([status, createdAt])
+  @@index([priority, createdAt])
+  @@index([createdAt])
   @@map("orders")
 }
 
@@ -198,6 +211,11 @@ model OrderItem {
   productionLogs     ProductionLog[]
   dispatchItems      DispatchItem[]
 
+  @@index([orderId])
+  @@index([productId])
+  @@index([productionStage, createdAt])
+  @@index([rawMaterialRequired, productionStage])
+  @@index([createdAt])
   @@map("order_items")
 }
 
@@ -219,6 +237,11 @@ model VendorRequest {
   vendorRequestItems VendorRequestItem[]
   materialReceipts   MaterialReceipt[]
 
+  @@index([vendorId, requestDate])
+  @@index([status, expectedArrivalDate])
+  @@index([requestDate])
+  @@index([expectedArrivalDate])
+  @@index([createdAt])
   @@map("vendor_requests")
 }
 
@@ -238,6 +261,9 @@ model VendorRequestItem {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  @@index([vendorRequestId])
+  @@index([orderItemId])
+  @@index([pendingQty])
   @@map("vendor_request_items")
 }
 
@@ -252,6 +278,7 @@ model MaterialReceipt {
   remarks          String?
   createdAt        DateTime      @default(now())
 
+  @@index([vendorRequestId, receivedDate])
   @@map("material_receipts")
 }
 
@@ -268,6 +295,9 @@ model ProductionLog {
   remarks        String?
   loggedAt       DateTime        @default(now())
 
+  @@index([orderItemId, loggedAt])
+  @@index([loggedAt])
+  @@index([updatedById])
   @@map("production_logs")
 }
 
@@ -288,6 +318,9 @@ model Dispatch {
 
   dispatchItems DispatchItem[]
 
+  @@index([orderId, dispatchDate])
+  @@index([dispatchDate])
+  @@index([isPartial, dispatchDate])
   @@map("dispatches")
 }
 
@@ -301,5 +334,7 @@ model DispatchItem {
   orderItemId   String
   qtyDispatched Int
 
+  @@index([dispatchId])
+  @@index([orderItemId])
   @@map("dispatch_items")
 }
